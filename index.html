@@ -264,6 +264,10 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
             <option value="Prêt / Validé">Prêt / Validé</option>
           </select>
         </div>
+        <div class="md:col-span-3 flex items-center gap-2">
+          <input type="checkbox" id="f-linkopen" class="accent-amber w-4 h-4">
+          <label for="f-linkopen" class="text-xs text-mute">Ouvrir le lien de suivi à la contribution (un contributeur pourra le renseigner)</label>
+        </div>
         <div class="md:col-span-3 flex justify-end gap-3 pt-1">
           <button type="button" id="cancel-btn" onclick="resetForm()" class="btn hidden">Annuler</button>
           <button type="submit" id="submit-btn" class="btn btn-primary">+ Ajouter la tâche</button>
@@ -337,7 +341,7 @@ const pWeight = p => ({Critique:3,Important:2,Normal:1}[p]||0);
 const prioColor = p => p==='Critique'?C.rosso : p==='Important'?C.amber : C.info;
 const debounce = (fn,ms)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
 const mapTask = t => ({ id:t.id, department_id:t.department_id, name:t.name, assignee:t.assignee,
-  priority:t.priority||'Normal', start:t.start_date, end:t.end_date, progress:t.progress??0, link:t.link, status:t.status||'À planifier' });
+  priority:t.priority||'Normal', start:t.start_date, end:t.end_date, progress:t.progress??0, link:t.link, link_open:!!t.link_open, status:t.status||'À planifier' });
 
 function statusBadge(s){ const m={ 'Prêt / Validé':['bg-go/15','text-go','border-go/40'],'En cours':['bg-amber/15','text-amber','border-amber/40'],'À planifier':['bg-panel2','text-mute','border-line'] }[s]||['bg-panel2','text-mute','border-line']; return `<span class="badge ${m[0]} ${m[1]} ${m[2]}">${esc(s)}</span>`; }
 function prioBadge(p){ const m={ 'Critique':['bg-rosso/15','text-rosso','border-rosso/40'],'Important':['bg-amber/15','text-amber','border-amber/40'],'Normal':['bg-info/15','text-info','border-info/40'] }[p]||['bg-info/15','text-info','border-info/40']; return `<span class="badge ${m[0]} ${m[1]} ${m[2]}">${esc(p||'Normal')}</span>`; }
@@ -478,7 +482,7 @@ function renderTable(){
         </tr></thead>
         <tbody class="divide-y divide-line">${sec.tasks.map(t=>`
           <tr class="${isLate(t)?'overdue-row':''}">
-            <td class="py-3.5 px-5 font-semibold text-ink">${esc(t.name)} ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1">retard</span>':''}</td>
+            <td class="py-3.5 px-5 font-semibold text-ink">${esc(t.name)} ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1">retard</span>':''}${t.link_open?'<span class="badge bg-amber/15 text-amber border-amber/40 ml-1">🔓 contrib.</span>':''}</td>
             <td class="py-3.5 px-5 text-mute">${esc(t.assignee||'Non assigné')}</td>
             <td class="py-3.5 px-5">${prioBadge(t.priority)}</td>
             <td class="py-3.5 px-5 text-mute font-display tnum whitespace-nowrap">${fmtDM(t.start)} → ${fmtDM(t.end)}</td>
@@ -487,9 +491,11 @@ function renderTable(){
             <td class="py-3.5 px-5 text-right whitespace-nowrap">
               ${t.link?`<a href="${esc(t.link)}" target="_blank" rel="noopener" class="text-info hover:underline">Suivi</a>`:''}
               ${isAdmin
-                ? `<button onclick="editTask(${t.id})" class="ml-2 text-amber hover:bg-amber/10 rounded-md px-1.5 py-1" title="Modifier" aria-label="Modifier">✏️</button><button onclick="deleteTask(${t.id})" class="text-rosso hover:bg-rosso/10 rounded-md px-1.5 py-1" title="Supprimer" aria-label="Supprimer">🗑️</button>`
+                ? `<button onclick="toggleLinkOpen(${t.id}, ${t.link_open?'false':'true'})" class="ml-2 ${t.link_open?'text-amber hover:bg-amber/10':'text-mute hover:bg-panel2'} rounded-md px-1.5 py-1" title="${t.link_open?'Fermer la contribution sur le lien':'Ouvrir le lien à la contribution'}">${t.link_open?'🔓':'🔒'}</button><button onclick="editTask(${t.id})" class="text-amber hover:bg-amber/10 rounded-md px-1.5 py-1" title="Modifier" aria-label="Modifier">✏️</button><button onclick="deleteTask(${t.id})" class="text-rosso hover:bg-rosso/10 rounded-md px-1.5 py-1" title="Supprimer" aria-label="Supprimer">🗑️</button>`
                 : (me && me.role==='contributeur')
-                  ? `<button onclick="editLink(${t.id})" class="ml-2 text-info hover:bg-info/10 rounded-md px-2 py-1" title="Ajouter / modifier le lien de suivi">🔗 Lien</button>`
+                  ? (t.link_open
+                      ? `<button onclick="editLink(${t.id})" class="ml-2 text-info hover:bg-info/10 rounded-md px-2 py-1" title="Ajouter / modifier le lien de suivi">🔗 Lien</button>`
+                      : `<span class="ml-2 text-mute px-2 py-1 inline-block" title="Ouvert par l'ingénieur uniquement">🔒</span>`)
                   : ''}
             </td>
           </tr>`).join('')}</tbody>
@@ -672,7 +678,7 @@ async function handleFormSubmit(e){
   const payload={ name:document.getElementById('f-name').value.trim(), assignee:document.getElementById('f-assignee').value.trim()||null,
     priority:document.getElementById('f-priority').value, start_date:start, end_date:end,
     progress:parseInt(document.getElementById('f-progress').value,10), link:document.getElementById('f-link').value.trim()||null,
-    status:document.getElementById('f-status').value };
+    status:document.getElementById('f-status').value, link_open:document.getElementById('f-linkopen').checked };
   const editId=document.getElementById('edit-id').value;
   try{
     payload.department_id=await ensureDepartment(rub);
@@ -698,6 +704,7 @@ function editTask(id){
   document.getElementById('f-end').value=task.end||'';
   document.getElementById('f-progress').value=task.progress; document.getElementById('range-val').innerText=task.progress;
   document.getElementById('f-status').value=task.status;
+  document.getElementById('f-linkopen').checked=!!task.link_open;
   document.getElementById('form-title').innerHTML='✏️ Panneau ingénieur — modifier la tâche';
   document.getElementById('submit-btn').innerText='Enregistrer les modifications';
   document.getElementById('cancel-btn').classList.remove('hidden');
@@ -721,10 +728,16 @@ async function editLink(id){
   if(!canEditLink()) return;
   let task=null; for(const d of projectData){ const t=d.tasks.find(x=>x.id===id); if(t){ task=t; break; } }
   if(!task) return;
+  if(me.role==='contributeur' && !task.link_open){ alert("Cette tâche n'est pas ouverte à la contribution."); return; }
   const url=prompt("Lien de suivi (Git, Jira, télémétrie) :", task.link||'');
   if(url===null) return;                 // annulé
   const link=url.trim()||null;
   const { error }=await sb.from('tasks').update({ link }).eq('id',id);
+  if(error){ alert('Erreur : '+error.message); } else { await loadData(); renderAll(); }
+}
+async function toggleLinkOpen(id, open){
+  if(!isAdmin) return;
+  const { error }=await sb.from('tasks').update({ link_open: open }).eq('id',id);
   if(error){ alert('Erreur : '+error.message); } else { await loadData(); renderAll(); }
 }
 
