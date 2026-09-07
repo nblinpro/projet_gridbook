@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pit Wall — Préparation course & planning paddock</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      colors: { track:'#0B0E13', surface:'#141920', panel:'#1C232D', panel2:'#232C38', line:'#2A333F',
+                ink:'#E6EDF3', mute:'#8B98A8', rosso:'#E10600', amber:'#F5A623', go:'#2ED47A', info:'#4C86E0' },
+      fontFamily: { display:['Oxanium','system-ui','sans-serif'], body:['Inter','system-ui','sans-serif'] }
+    }}
+  }
+</script>
+
+<!-- SDK Supabase (expose window.supabase) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{ --label-w: 220px; }
+  html,body{ background:#0B0E13; color:#E6EDF3; font-family:'Inter',system-ui,sans-serif; }
+  body{ -webkit-font-smoothing:antialiased; }
+  .font-display{ font-family:'Oxanium',system-ui,sans-serif; }
+  .tnum{ font-variant-numeric: tabular-nums; }
+  :focus-visible{ outline:2px solid #4C86E0; outline-offset:2px; border-radius:6px; }
+  .checkers{ background-image:conic-gradient(#0B0E13 90deg, transparent 90deg 180deg, #0B0E13 180deg 270deg, transparent 270deg); background-size:8px 8px; opacity:.5; }
+  ::-webkit-scrollbar{ height:10px; width:10px; }
+  ::-webkit-scrollbar-thumb{ background:#2A333F; border-radius:8px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+
+  .screen{ min-height:64vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .card{ background:#141920; border:1px solid #2A333F; border-radius:16px; padding:28px; max-width:460px; width:100%; }
+
+  .tile{ background:#141920; border:1px solid #2A333F; border-radius:12px; padding:12px 14px; }
+  .tile-num{ font-size:30px; line-height:1; font-weight:700; }
+  .tile-label{ font-size:11px; color:#8B98A8; margin-top:6px; }
+
+  .cd-seg{ display:flex; flex-direction:column; align-items:center; min-width:52px; }
+  .cd-n{ font-size:38px; font-weight:800; line-height:1; letter-spacing:1px; }
+  .cd-u{ font-size:10px; color:#8B98A8; margin-top:4px; }
+  .cd-colon{ font-size:30px; color:#3a4552; font-weight:700; align-self:flex-start; margin-top:2px; }
+
+  .tab{ padding:9px 16px; font-size:13px; font-weight:600; border-radius:9px; border:1px solid transparent; color:#8B98A8; transition:background .15s,color .15s; }
+  .tab:hover{ color:#E6EDF3; background:#1C232D; }
+  .tab[aria-selected="true"]{ background:#1C232D; color:#E6EDF3; border-color:#2A333F; box-shadow: inset 0 -2px 0 #E10600; }
+
+  .in{ width:100%; font-size:13px; background:#0B0E13; border:1px solid #2A333F; color:#E6EDF3; border-radius:9px; padding:9px 11px; }
+  .in::placeholder{ color:#5a6675; }
+  .in:focus{ border-color:#4C86E0; }
+
+  .btn{ font-size:13px; font-weight:600; border-radius:9px; padding:9px 14px; border:1px solid #2A333F; background:#1C232D; color:#E6EDF3; transition:background .15s,border-color .15s; cursor:pointer; }
+  .btn:hover{ background:#232C38; }
+  .btn-primary{ background:#E10600; border-color:#E10600; color:#fff; }
+  .btn-primary:hover{ background:#c40500; }
+  .btn-ghost{ background:transparent; }
+
+  .badge{ display:inline-block; font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; border:1px solid transparent; }
+  .bar{ height:6px; border-radius:999px; background:#2A333F; overflow:hidden; }
+  .bar > i{ display:block; height:100%; border-radius:999px; background:#2ED47A; }
+  tbody tr:hover{ background:#181f28; }
+  .overdue-row td:first-child{ box-shadow: inset 3px 0 0 #E10600; }
+
+  .g-row{ display:flex; align-items:center; height:36px; }
+  .g-label{ flex:0 0 var(--label-w); width:var(--label-w); padding-right:14px; font-size:12px; color:#E6EDF3; overflow:hidden; }
+  .g-label small{ color:#8B98A8; }
+  .g-track{ position:relative; flex:1 1 auto; height:24px; border-radius:7px; background:transparent; border:1px solid #202832; }
+  .g-bar{ position:absolute; top:2px; bottom:2px; border-radius:5px; overflow:hidden; display:flex; align-items:center; }
+  .g-bar > .fill{ position:absolute; left:0; top:0; bottom:0; }
+  .g-bar > .lab{ position:relative; font-size:10px; font-weight:700; padding:0 7px; white-space:nowrap; }
+  .g-body{ position:relative; }
+  .g-overlay{ position:absolute; top:0; bottom:0; left:var(--label-w); right:0; pointer-events:none; }
+  .g-grid{ position:absolute; top:0; bottom:0; width:1px; background:#1a212b; }
+  .g-today{ position:absolute; top:-6px; bottom:0; width:2px; background:#4C86E0; }
+  .g-today::after{ content:'Aujourd’hui'; position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-size:9px; color:#4C86E0; white-space:nowrap; }
+  .g-race{ position:absolute; top:-6px; bottom:0; width:2px; background:#E10600; }
+  .g-race::after{ content:'🏁 Course'; position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-size:9px; color:#E10600; white-space:nowrap; }
+
+  @media (max-width:640px){ :root{ --label-w:120px; } .cd-n{ font-size:30px; } }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+</head>
+<body class="pb-20">
+
+<header class="bg-surface border-b border-line sticky top-0 z-40">
+  <div class="max-w-7xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="font-display font-extrabold text-white bg-rosso rounded-lg px-2.5 py-1.5 text-sm tracking-wide shrink-0">PIT&nbsp;WALL</div>
+      <div class="min-w-0">
+        <h1 class="font-display font-bold text-white text-base leading-tight truncate">Préparation course & planning paddock</h1>
+        <p class="text-xs text-mute truncate">Carnet de bord partagé — moteur, châssis, télémétrie, stratégie</p>
+      </div>
+    </div>
+    <div id="user-area" class="hidden items-center gap-3 shrink-0"></div>
+  </div>
+  <div class="checkers h-1.5 w-full" aria-hidden="true"></div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 md:px-6 mt-6 md:mt-8">
+
+  <!-- ÉCRAN : configuration requise -->
+  <div id="setup-screen" class="hidden screen">
+    <div class="card">
+      <h2 class="font-display font-bold text-white text-lg mb-2">Connexion à Supabase requise</h2>
+      <p class="text-sm text-mute mb-4">Cette application a besoin de ta base Supabase pour partager les données entre les 14 utilisateurs. Ouvre <code class="text-info">index.html</code> et renseigne, tout en haut du script, ces deux valeurs :</p>
+      <pre class="text-xs bg-track border border-line rounded-lg p-3 overflow-x-auto text-ink mb-4">const SUPABASE_URL = "https://xxxx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJ...";</pre>
+      <p class="text-sm text-mute">Tu les trouves dans <b class="text-ink">Supabase &gt; Project Settings &gt; API</b> (Project URL et clé <b class="text-ink">anon public</b>). Enregistre, recharge la page.</p>
+      <p id="setup-sdk" class="hidden mt-4 text-sm text-amber">⚠️ Le SDK Supabase n'a pas pu se charger — vérifie ta connexion réseau puis recharge.</p>
+    </div>
+  </div>
+
+  <!-- ÉCRAN : connexion -->
+  <div id="login-screen" class="hidden screen">
+    <div class="card">
+      <div class="font-display font-extrabold text-white bg-rosso rounded-lg px-2.5 py-1.5 text-sm tracking-wide inline-block mb-4">PIT&nbsp;WALL</div>
+      <h2 class="font-display font-bold text-white text-lg mb-1">Connexion</h2>
+      <p class="text-sm text-mute mb-5">Accès réservé à l'équipe. Les comptes sont créés par l'administrateur.</p>
+      <form onsubmit="doLogin(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs text-mute mb-1">Adresse e-mail</label>
+          <input id="login-email" type="email" class="in" autocomplete="username" required>
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Mot de passe</label>
+          <input id="login-pass" type="password" class="in" autocomplete="current-password" required>
+        </div>
+        <p id="login-error" class="hidden text-xs text-rosso"></p>
+        <button id="login-btn" type="submit" class="btn btn-primary w-full">Se connecter</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- APPLICATION -->
+  <div id="app" class="hidden">
+
+    <!-- HERO -->
+    <section class="bg-panel border border-line rounded-2xl p-5 md:p-6 mb-6">
+      <div class="grid grid-cols-1 lg:grid-cols-[240px,1fr] gap-6 items-center">
+        <div class="flex flex-col items-center">
+          <div id="gauge" class="w-full max-w-[240px]" role="img" aria-label="Niveau de préparation de la voiture"></div>
+        </div>
+        <div class="min-w-0">
+          <div class="text-xs text-mute mb-1">Départ&nbsp;· <span id="cd-event" class="text-ink font-semibold">—</span></div>
+          <div id="countdown" class="flex items-center gap-2 mb-5">
+            <div class="cd-seg"><span id="cd-d" class="cd-n font-display tnum text-ink">--</span><span class="cd-u">jours</span></div>
+            <span class="cd-colon">:</span>
+            <div class="cd-seg"><span id="cd-h" class="cd-n font-display tnum text-ink">--</span><span class="cd-u">heures</span></div>
+            <span class="cd-colon">:</span>
+            <div class="cd-seg"><span id="cd-m" class="cd-n font-display tnum text-ink">--</span><span class="cd-u">min</span></div>
+            <span class="cd-colon">:</span>
+            <div class="cd-seg"><span id="cd-s" class="cd-n font-display tnum text-amber">--</span><span class="cd-u">sec</span></div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="tile"><div id="k-open"  class="tile-num font-display tnum text-ink">0</div><div class="tile-label">Tâches ouvertes</div></div>
+            <div class="tile"><div id="k-crit"  class="tile-num font-display tnum text-rosso">0</div><div class="tile-label">Points bloquants</div></div>
+            <div class="tile"><div id="k-late"  class="tile-num font-display tnum text-mute">0</div><div class="tile-label">En retard</div></div>
+            <div class="tile"><div id="k-ready" class="tile-num font-display tnum text-go">0</div><div class="tile-label">Validées</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANNEAU INGÉNIEUR -->
+    <section id="admin-panel" class="hidden mb-6 bg-panel border border-line rounded-2xl overflow-hidden">
+      <div class="bg-panel2 border-b border-line px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+        <h2 id="form-title" class="font-display font-bold text-white text-sm flex items-center gap-2">⚙️ Panneau ingénieur — ajouter une tâche</h2>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button class="btn" onclick="exportJSON()">📥 Exporter JSON</button>
+          <button class="btn" onclick="exportCSV()">📄 Exporter CSV</button>
+        </div>
+      </div>
+
+      <!-- Réglage de la course -->
+      <div class="px-5 py-4 border-b border-line grid grid-cols-1 sm:grid-cols-[1fr,auto,auto] gap-3 items-end">
+        <div>
+          <label class="block text-xs text-mute mb-1">Nom de la prochaine course</label>
+          <input id="race-name" class="in" placeholder="Ex : Grand Prix — Circuit Paul Ricard">
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Date & heure du départ</label>
+          <input id="race-date" type="datetime-local" class="in">
+        </div>
+        <button class="btn btn-primary" onclick="saveRace()">Appliquer</button>
+      </div>
+
+      <!-- Départements -->
+      <div class="px-5 py-4 border-b border-line">
+        <h3 class="font-display font-bold text-white text-sm mb-3 flex items-center gap-2">🗂️ Départements</h3>
+        <div id="dept-manager" class="space-y-2"></div>
+        <div class="flex gap-2 mt-3">
+          <input id="new-dept" class="in flex-1" placeholder="Nouveau département — ex : Sécurité & extinction"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addDept();}">
+          <button class="btn" onclick="addDept()">+ Ajouter</button>
+        </div>
+        <p class="text-[11px] text-mute mt-2">Renommer répercute le changement sur toutes les tâches. Les flèches modifient l’ordre d’affichage partout.</p>
+      </div>
+
+      <!-- Formulaire tâche -->
+      <form id="task-form" onsubmit="handleFormSubmit(event)" class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input type="hidden" id="edit-id">
+        <div>
+          <label class="block text-xs text-mute mb-1">Département / rubrique</label>
+          <input id="f-rub" class="in" list="rub-list" placeholder="Ex : Moteur & Powertrain" required>
+          <datalist id="rub-list"></datalist>
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Intitulé de l’intervention</label>
+          <input id="f-name" class="in" placeholder="Ex : Révision turbo & cartographie" required>
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Responsable / mécanicien</label>
+          <input id="f-assignee" class="in" placeholder="Ex : Marc (moteur)">
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Lien de suivi (Git, Jira, télémétrie)</label>
+          <input id="f-link" type="url" class="in" placeholder="https://github.com/nblinpro/…">
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Planning (début → fin)</label>
+          <div class="flex gap-2">
+            <input id="f-start" type="date" class="in" required>
+            <input id="f-end" type="date" class="in" required>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Criticité</label>
+          <select id="f-priority" class="in">
+            <option value="Normal">🔵 Normal</option>
+            <option value="Important">🟠 Important</option>
+            <option value="Critique">🔴 Critique / bloquant</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Avancement — <span id="range-val" class="text-go font-bold">50</span>%</label>
+          <input id="f-progress" type="range" min="0" max="100" value="50" class="w-full mt-3 accent-rosso cursor-pointer"
+                 oninput="document.getElementById('range-val').innerText=this.value">
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Statut atelier</label>
+          <select id="f-status" class="in">
+            <option value="À planifier">À planifier</option>
+            <option value="En cours">En cours</option>
+            <option value="Prêt / Validé">Prêt / Validé</option>
+          </select>
+        </div>
+        <div class="md:col-span-3 flex justify-end gap-3 pt-1">
+          <button type="button" id="cancel-btn" onclick="resetForm()" class="btn hidden">Annuler</button>
+          <button type="submit" id="submit-btn" class="btn btn-primary">+ Ajouter la tâche</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Onglets + contrôles -->
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
+      <div role="tablist" class="flex gap-2">
+        <button role="tab" id="tab-board"  aria-selected="true"  class="tab" onclick="switchView('board')">📊 Tableau de bord</button>
+        <button role="tab" id="tab-table"  aria-selected="false" class="tab" onclick="switchView('table')">📋 Interventions</button>
+        <button role="tab" id="tab-gantt"  aria-selected="false" class="tab" onclick="switchView('gantt')">📈 Gantt</button>
+      </div>
+      <div id="controls" class="hidden flex-wrap items-center gap-2">
+        <input id="search" class="in max-w-[220px]" placeholder="Rechercher (tâche, responsable)…" oninput="setFilter('q', this.value)">
+        <select id="fltDept" class="in w-auto" onchange="setFilter('dept', this.value)"></select>
+        <select class="in w-auto" onchange="setFilter('status', this.value)">
+          <option value="ALL">Tous statuts</option><option>À planifier</option><option>En cours</option><option>Prêt / Validé</option>
+        </select>
+        <select class="in w-auto" onchange="setFilter('priority', this.value)">
+          <option value="ALL">Toutes criticités</option><option>Critique</option><option>Important</option><option>Normal</option>
+        </select>
+        <select class="in w-auto" onchange="setFilter('sort', this.value)">
+          <option value="date">Tri : date de début</option>
+          <option value="end">Tri : échéance</option>
+          <option value="priority">Tri : criticité</option>
+          <option value="progress">Tri : avancement</option>
+          <option value="name">Tri : nom</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="view"></div>
+  </div>
+</main>
+
+<script>
+/* ============================ CONFIG SUPABASE ============================ */
+/* ⬇️ Remplace ces deux valeurs par celles de ton projet
+   (Supabase > Project Settings > API : Project URL + clé "anon public"). */
+const SUPABASE_URL      = "https://xxxx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOi...remplace-moi";
+
+const CONFIGURED = !/xxxx\.supabase\.co|remplace-moi/.test(SUPABASE_URL + SUPABASE_ANON_KEY);
+let sb = null;
+if (CONFIGURED && window.supabase) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ============================ ÉTAT ============================ */
+let projectData = [];
+let race = { name:'—', date:'' };
+let me = null, isAdmin = false;
+let currentView = 'board';
+let filters = { q:'', status:'ALL', priority:'ALL', dept:'ALL', sort:'date' };
+let gaugeAnimated = false, gaugeShown = 0;
+let cdTimer = null, channel = null;
+
+const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const C = { rosso:'#E10600', amber:'#F5A623', go:'#2ED47A', info:'#4C86E0', mute:'#8B98A8', line:'#2A333F' };
+
+/* ============================ HELPERS ============================ */
+const esc = (s='')=> String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+function pDate(s){ if(!s) return null; const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function today0(){ const t=new Date(); return new Date(t.getFullYear(),t.getMonth(),t.getDate()); }
+const isDone = t => t.status==='Prêt / Validé';
+const isLate = t => !isDone(t) && pDate(t.end) && pDate(t.end) < today0();
+const fmtDM  = s => { const d=pDate(s); return d ? String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0') : '—'; };
+const pWeight = p => ({Critique:3,Important:2,Normal:1}[p]||0);
+const prioColor = p => p==='Critique'?C.rosso : p==='Important'?C.amber : C.info;
+const debounce = (fn,ms)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
+const mapTask = t => ({ id:t.id, department_id:t.department_id, name:t.name, assignee:t.assignee,
+  priority:t.priority||'Normal', start:t.start_date, end:t.end_date, progress:t.progress??0, link:t.link, status:t.status||'À planifier' });
+
+function statusBadge(s){ const m={ 'Prêt / Validé':['bg-go/15','text-go','border-go/40'],'En cours':['bg-amber/15','text-amber','border-amber/40'],'À planifier':['bg-panel2','text-mute','border-line'] }[s]||['bg-panel2','text-mute','border-line']; return `<span class="badge ${m[0]} ${m[1]} ${m[2]}">${esc(s)}</span>`; }
+function prioBadge(p){ const m={ 'Critique':['bg-rosso/15','text-rosso','border-rosso/40'],'Important':['bg-amber/15','text-amber','border-amber/40'],'Normal':['bg-info/15','text-info','border-info/40'] }[p]||['bg-info/15','text-info','border-info/40']; return `<span class="badge ${m[0]} ${m[1]} ${m[2]}">${esc(p||'Normal')}</span>`; }
+
+/* ============================ ACCÈS DONNÉES (Supabase) ============================ */
+async function loadData(){
+  const [d, t, r] = await Promise.all([
+    sb.from('departments').select('*').order('position'),
+    sb.from('tasks').select('*').order('id'),
+    sb.from('settings').select('value').eq('key','race').maybeSingle()
+  ]);
+  if(d.error) console.error(d.error); if(t.error) console.error(t.error);
+  const byDept = {};
+  (t.data||[]).forEach(x=>{ (byDept[x.department_id] ||= []).push(mapTask(x)); });
+  projectData = (d.data||[]).map(dep=>({ id:dep.id, rubrique:dep.name, position:dep.position, tasks:(byDept[dep.id]||[]) }));
+  if(r && r.data && r.data.value) race = r.data.value;
+}
+
+/* ============================ STATS ============================ */
+function stats(){
+  let all=[]; projectData.forEach(s=> s.tasks.forEach(t=> all.push(t)));
+  const n=all.length||1;
+  return { total:all.length, avg:Math.round(all.reduce((a,t)=>a+(+t.progress||0),0)/n),
+    open:all.filter(t=>!isDone(t)).length, crit:all.filter(t=>t.priority==='Critique'&&!isDone(t)).length,
+    late:all.filter(isLate).length, ready:all.filter(isDone).length,
+    planif:all.filter(t=>t.status==='À planifier').length, prog:all.filter(t=>t.status==='En cours').length };
+}
+
+/* ============================ JAUGE ============================ */
+function polar(cx,cy,r,deg){ const a=deg*Math.PI/180; return { x:cx+r*Math.cos(a), y:cy+r*Math.sin(a) }; }
+function arc(cx,cy,r,a0,a1){ const p0=polar(cx,cy,r,a0),p1=polar(cx,cy,r,a1); const large=(a1-a0)>180?1:0; return `M ${p0.x.toFixed(2)} ${p0.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`; }
+function gaugeSVG(v){
+  const cx=100,cy=104,r=80,w=13,a0=180,span=180,va=a0+(v/100)*span;
+  const band=v>=75?C.go:v>=40?C.amber:C.rosso;
+  const word=v>=75?'Prêt pour la grille':v>=40?'En préparation':'En alerte';
+  let ticks=''; for(let i=0;i<=10;i++){ const ang=a0+(i/10)*span,o=polar(cx,cy,r-w-2,ang),q=polar(cx,cy,r-w-8,ang); ticks+=`<line x1="${o.x.toFixed(1)}" y1="${o.y.toFixed(1)}" x2="${q.x.toFixed(1)}" y2="${q.y.toFixed(1)}" stroke="#33404f" stroke-width="${i%5===0?2:1}"/>`; }
+  const nd=polar(cx,cy,r-w-6,va),nb1=polar(cx,cy,7,va+90),nb2=polar(cx,cy,7,va-90);
+  return `<svg viewBox="0 0 200 124" width="100%">${ticks}
+    <path d="${arc(cx,cy,r,a0,a0+span)}" fill="none" stroke="#232C38" stroke-width="${w}" stroke-linecap="round"/>
+    <path d="${arc(cx,cy,r,a0,va)}" fill="none" stroke="${band}" stroke-width="${w}" stroke-linecap="round"/>
+    <polygon points="${nd.x.toFixed(1)},${nd.y.toFixed(1)} ${nb1.x.toFixed(1)},${nb1.y.toFixed(1)} ${nb2.x.toFixed(1)},${nb2.y.toFixed(1)}" fill="#E6EDF3"/>
+    <circle cx="${cx}" cy="${cy}" r="8" fill="#1C232D" stroke="#33404f" stroke-width="2"/>
+    <text x="${cx}" y="66" text-anchor="middle" font-family="Oxanium" font-weight="800" font-size="40" fill="#E6EDF3" style="font-variant-numeric:tabular-nums">${Math.round(v)}<tspan font-size="18" dy="-14">%</tspan></text>
+    <text x="${cx}" y="90" text-anchor="middle" font-family="Inter" font-size="11" fill="${band}" font-weight="600">${word}</text></svg>`;
+}
+function renderGauge(target, animate){
+  const el=document.getElementById('gauge'); if(!el) return;
+  if(!animate||REDUCE){ gaugeShown=target; el.innerHTML=gaugeSVG(target); return; }
+  const dur=900,t0=performance.now();
+  (function step(now){ const k=Math.min(1,(now-t0)/dur),e=1-Math.pow(1-k,3); el.innerHTML=gaugeSVG(target*e); if(k<1) requestAnimationFrame(step); else gaugeShown=target; })(performance.now());
+}
+
+/* ============================ COMPTE À REBOURS ============================ */
+function tickCountdown(){
+  const el=document.getElementById('cd-d'); if(!el) return;
+  const target=new Date(race.date).getTime(), dist=target-Date.now();
+  const set=(id,v)=>{ const n=document.getElementById(id); if(n) n.innerText=String(v).padStart(2,'0'); };
+  if(isNaN(target)){ ['cd-d','cd-h','cd-m','cd-s'].forEach(i=>{const n=document.getElementById(i); if(n)n.innerText='--';}); return; }
+  if(dist<=0){ ['cd-d','cd-h','cd-m','cd-s'].forEach(i=>set(i,0)); document.getElementById('cd-event').innerHTML=esc(race.name)+' — <span class="text-rosso font-semibold">départ donné</span>'; return; }
+  set('cd-d',Math.floor(dist/86400000)); set('cd-h',Math.floor(dist/3600000)%24); set('cd-m',Math.floor(dist/60000)%60); set('cd-s',Math.floor(dist/1000)%60);
+}
+function refreshEventLabel(){ const n=document.getElementById('cd-event'); if(n) n.innerText=race.name||'—'; }
+function startCountdown(){ if(cdTimer) return; refreshEventLabel(); tickCountdown(); cdTimer=setInterval(tickCountdown,1000); }
+
+/* ============================ HERO ============================ */
+function renderHero(){
+  const s=stats();
+  document.getElementById('k-open').innerText=s.open;
+  document.getElementById('k-crit').innerText=s.crit;
+  const late=document.getElementById('k-late'); late.innerText=s.late; late.className='tile-num font-display tnum '+(s.late>0?'text-rosso':'text-mute');
+  document.getElementById('k-ready').innerText=s.ready;
+  renderGauge(s.avg, !gaugeAnimated); gaugeAnimated=true;
+}
+
+/* ============================ FILTRAGE ============================ */
+function getFiltered(){
+  const q=filters.q.trim().toLowerCase();
+  let data=projectData.map(sec=>({ id:sec.id, rubrique:sec.rubrique, tasks:sec.tasks.filter(t=>{
+    if(filters.status!=='ALL' && t.status!==filters.status) return false;
+    if(filters.priority!=='ALL' && (t.priority||'Normal')!==filters.priority) return false;
+    if(q && !((t.name||'').toLowerCase().includes(q)||(t.assignee||'').toLowerCase().includes(q))) return false;
+    return true;
+  })}));
+  if(filters.dept!=='ALL') data=data.filter(s=>s.rubrique===filters.dept);
+  data=data.filter(s=>s.tasks.length>0);
+  const cmp={ date:(a,b)=>pDate(a.start)-pDate(b.start), end:(a,b)=>pDate(a.end)-pDate(b.end), progress:(a,b)=>b.progress-a.progress, priority:(a,b)=>pWeight(b.priority)-pWeight(a.priority), name:(a,b)=>(a.name||'').localeCompare(b.name||'') }[filters.sort]||(()=>0);
+  data.forEach(s=> s.tasks=[...s.tasks].sort(cmp));
+  return data;
+}
+function setFilter(k,v){ filters[k]=v; if(currentView!=='board') renderView(); }
+
+/* ============================ VUE : TABLEAU DE BORD ============================ */
+function renderBoard(){
+  const s=stats();
+  const depts=projectData.map(sec=>{ const n=sec.tasks.length||1; return { name:sec.rubrique, avg:Math.round(sec.tasks.reduce((a,t)=>a+(+t.progress||0),0)/n), n:sec.tasks.length }; }).sort((a,b)=>b.avg-a.avg);
+  const deptBars=depts.map(d=>`
+    <div><div class="flex justify-between text-xs mb-1.5"><span class="text-ink truncate pr-2">${esc(d.name)} <span class="text-mute">· ${d.n}</span></span><span class="font-display tnum ${d.avg>=75?'text-go':d.avg>=40?'text-amber':'text-rosso'}">${d.avg}%</span></div>
+    <div class="bar"><i style="width:${d.avg}%; background:${d.avg>=75?C.go:d.avg>=40?C.amber:C.rosso}"></i></div></div>`).join('') || '<p class="text-xs text-mute">Aucun département.</p>';
+
+  const segs=[{value:s.planif,color:C.mute,label:'À planifier'},{value:s.prog,color:C.amber,label:'En cours'},{value:s.ready,color:C.go,label:'Validées'}];
+  const total=segs.reduce((a,x)=>a+x.value,0)||1,r=54,circ=2*Math.PI*r; let off=0;
+  const rings=segs.map(x=>{ const len=(x.value/total)*circ; const c=`<circle cx="80" cy="80" r="${r}" fill="none" stroke="${x.color}" stroke-width="16" stroke-dasharray="${len.toFixed(2)} ${(circ-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 80 80)"/>`; off+=len; return c; }).join('');
+  const legend=segs.map(x=>`<div class="flex items-center justify-between text-xs py-1"><span class="flex items-center gap-2"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${x.color}"></i>${x.label}</span><b class="font-display tnum text-ink">${x.value}</b></div>`).join('');
+
+  let alerts=[]; projectData.forEach(sec=> sec.tasks.forEach(t=>{ const late=isLate(t),crit=(t.priority==='Critique'&&!isDone(t)); if(late||crit) alerts.push({t,late,crit}); }));
+  alerts.sort((a,b)=>(b.late+b.crit)-(a.late+a.crit)||pWeight(b.t.priority)-pWeight(a.t.priority));
+  const alertItems=alerts.length?alerts.map(a=>`
+    <div class="flex items-center justify-between gap-3 py-2.5 border-b border-line last:border-0 ${isAdmin?'cursor-pointer hover:bg-panel2/50 px-2 -mx-2 rounded-lg':''}" ${isAdmin?`onclick="editTask(${a.t.id})"`:''}>
+      <div class="min-w-0"><div class="text-sm text-ink truncate">${esc(a.t.name)}</div><div class="text-xs text-mute truncate">${esc(a.t.assignee||'Non assigné')} · échéance ${fmtDM(a.t.end)}</div></div>
+      <div class="flex items-center gap-1.5 shrink-0">${a.crit?'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Bloquant</span>':''}${a.late?'<span class="badge bg-amber/15 text-amber border-amber/40">En retard</span>':''}</div>
+    </div>`).join('') : `<div class="text-sm text-mute py-6 text-center">Aucun point bloquant. La voiture avance selon le plan. 🟢</div>`;
+
+  document.getElementById('view').innerHTML=`
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="lg:col-span-2 bg-panel border border-line rounded-2xl p-5"><h3 class="font-display font-bold text-white text-sm mb-4">Avancement par département</h3><div class="space-y-3.5">${deptBars}</div></div>
+      <div class="bg-panel border border-line rounded-2xl p-5"><h3 class="font-display font-bold text-white text-sm mb-3">Répartition des statuts</h3>
+        <div class="flex items-center gap-4"><div class="relative shrink-0"><svg viewBox="0 0 160 160" width="128" height="128"><circle cx="80" cy="80" r="${r}" fill="none" stroke="#232C38" stroke-width="16"/>${rings}</svg>
+        <div class="absolute inset-0 flex flex-col items-center justify-center"><span class="font-display font-extrabold tnum text-2xl text-ink">${s.total}</span><span class="text-[10px] text-mute">tâches</span></div></div><div class="flex-1">${legend}</div></div></div>
+      <div class="lg:col-span-3 bg-panel border border-line rounded-2xl p-5"><div class="flex items-center gap-2 mb-2"><h3 class="font-display font-bold text-white text-sm">Alertes pit-wall</h3><span class="badge ${alerts.length?'bg-rosso/15 text-rosso border-rosso/40':'bg-go/15 text-go border-go/40'}">${alerts.length}</span></div><p class="text-xs text-mute mb-3">Interventions critiques non terminées ou en retard sur l’échéance.</p>${alertItems}</div>
+    </div>
+    <div class="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-mute px-1"><span class="font-semibold text-ink">Légende&nbsp;:</span>
+      <span class="flex items-center gap-1.5"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${C.rosso}"></i>Critique</span>
+      <span class="flex items-center gap-1.5"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${C.amber}"></i>Important / en cours</span>
+      <span class="flex items-center gap-1.5"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${C.info}"></i>Normal</span>
+      <span class="flex items-center gap-1.5"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${C.go}"></i>Validé</span></div>`;
+}
+
+/* ============================ VUE : INTERVENTIONS ============================ */
+function renderTable(){
+  const data=getFiltered();
+  if(!data.length){ document.getElementById('view').innerHTML=emptyState('Aucune intervention ne correspond au filtre.'); return; }
+  document.getElementById('view').innerHTML=data.map(sec=>`
+    <div class="bg-panel border border-line rounded-2xl overflow-hidden mb-5">
+      <div class="bg-panel2 border-b border-line px-5 py-3.5 flex justify-between items-center"><h2 class="font-display font-bold text-sm text-ink flex items-center gap-2">🔧 ${esc(sec.rubrique)}</h2><span class="badge bg-surface text-mute border-line">${sec.tasks.length} tâche(s)</span></div>
+      <div class="overflow-x-auto"><table class="w-full text-left text-xs min-w-[820px]">
+        <thead class="text-mute border-b border-line"><tr>
+          <th class="py-3 px-5 font-semibold">Intervention</th><th class="py-3 px-5 font-semibold">Responsable</th><th class="py-3 px-5 font-semibold">Criticité</th><th class="py-3 px-5 font-semibold">Planning</th><th class="py-3 px-5 font-semibold">Statut</th><th class="py-3 px-5 font-semibold w-40">Avancement</th><th class="py-3 px-5 font-semibold text-right">Actions</th>
+        </tr></thead>
+        <tbody class="divide-y divide-line">${sec.tasks.map(t=>`
+          <tr class="${isLate(t)?'overdue-row':''}">
+            <td class="py-3.5 px-5 font-semibold text-ink">${esc(t.name)} ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1">retard</span>':''}</td>
+            <td class="py-3.5 px-5 text-mute">${esc(t.assignee||'Non assigné')}</td>
+            <td class="py-3.5 px-5">${prioBadge(t.priority)}</td>
+            <td class="py-3.5 px-5 text-mute font-display tnum whitespace-nowrap">${fmtDM(t.start)} → ${fmtDM(t.end)}</td>
+            <td class="py-3.5 px-5">${statusBadge(t.status)}</td>
+            <td class="py-3.5 px-5"><div class="flex items-center gap-2"><div class="bar flex-1"><i style="width:${t.progress}%"></i></div><span class="font-display tnum text-mute w-9 text-right">${t.progress}%</span></div></td>
+            <td class="py-3.5 px-5 text-right whitespace-nowrap">
+              ${t.link?`<a href="${esc(t.link)}" target="_blank" rel="noopener" class="text-info hover:underline">Suivi</a>`:''}
+              ${isAdmin?`<button onclick="editTask(${t.id})" class="ml-2 text-amber hover:bg-amber/10 rounded-md px-1.5 py-1" title="Modifier" aria-label="Modifier">✏️</button><button onclick="deleteTask(${t.id})" class="text-rosso hover:bg-rosso/10 rounded-md px-1.5 py-1" title="Supprimer" aria-label="Supprimer">🗑️</button>`:''}
+            </td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`).join('');
+}
+
+/* ============================ VUE : GANTT ============================ */
+function renderGantt(){
+  const data=getFiltered();
+  let dates=[]; data.forEach(s=>s.tasks.forEach(t=>{ if(t.start)dates.push(pDate(t.start)); if(t.end)dates.push(pDate(t.end)); }));
+  const raceD=new Date(race.date); if(!isNaN(raceD)) dates.push(new Date(raceD.getFullYear(),raceD.getMonth(),raceD.getDate()));
+  dates.push(today0());
+  if(!data.length||!dates.length){ document.getElementById('view').innerHTML=emptyState('Aucune tâche planifiée à afficher.'); return; }
+  const DAY=86400000; let min=new Date(Math.min(...dates)),max=new Date(Math.max(...dates)); min=new Date(min-2*DAY); max=new Date(+max+3*DAY);
+  const span=Math.max(DAY,max-min), pct=d=>((d-min)/span)*100;
+  let ticks=[],cur=new Date(min); cur.setDate(cur.getDate()+((8-cur.getDay())%7)); while(cur<=max){ ticks.push(new Date(cur)); cur=new Date(+cur+7*DAY); }
+  const grid=ticks.map(d=>`<div class="g-grid" style="left:${pct(d).toFixed(2)}%"></div>`).join('');
+  const axis=ticks.map(d=>`<span class="absolute font-display tnum text-[10px] text-mute" style="left:${pct(d).toFixed(2)}%; transform:translateX(-50%)">${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}</span>`).join('');
+  const todayLine=`<div class="g-today" style="left:${pct(today0()).toFixed(2)}%"></div>`;
+  const raceLine=isNaN(raceD)?'':`<div class="g-race" style="left:${pct(new Date(raceD.getFullYear(),raceD.getMonth(),raceD.getDate())).toFixed(2)}%"></div>`;
+  const rows=data.map(sec=>`
+    <div class="mb-4"><div class="text-xs font-display font-bold text-ink bg-panel2 rounded-lg px-3 py-2 mb-2 inline-flex items-center gap-2">🏁 ${esc(sec.rubrique)}</div>
+    ${sec.tasks.map(t=>{ const l=pct(pDate(t.start)),w=Math.max(1.5,pct(pDate(t.end))-l),col=prioColor(t.priority);
+      return `<div class="g-row" title="${esc(t.name)} — ${esc(t.assignee||'')}&#10;${fmtDM(t.start)} → ${fmtDM(t.end)} · ${t.progress}% · ${esc(t.status)}">
+        <div class="g-label truncate">${esc(t.name)}<br><small>${esc(t.assignee||'—')}</small></div>
+        <div class="g-track"><div class="g-bar" style="left:${l.toFixed(2)}%; width:${w.toFixed(2)}%; background:${col}22; border:1px solid ${col}"><div class="fill" style="width:${t.progress}%; background:${col}"></div><span class="lab" style="color:${t.progress>55?'#0B0E13':'#E6EDF3'}">${t.progress}%</span></div></div>
+      </div>`; }).join('')}</div>`).join('');
+  document.getElementById('view').innerHTML=`
+    <div class="bg-panel border border-line rounded-2xl p-5 overflow-x-auto">
+      <div class="flex items-center justify-between mb-4"><h3 class="font-display font-bold text-white text-sm">Chronogramme paddock</h3>
+        <div class="flex items-center gap-4 text-[10px] text-mute"><span class="flex items-center gap-1.5"><i class="inline-block w-3 h-0.5" style="background:${C.info}"></i>Aujourd’hui</span><span class="flex items-center gap-1.5"><i class="inline-block w-3 h-0.5" style="background:${C.rosso}"></i>Course</span></div></div>
+      <div class="min-w-[760px]">
+        <div class="g-row mb-2" style="height:20px"><div class="g-label"></div><div class="relative flex-1 h-full">${axis}</div></div>
+        <div class="g-body pt-1"><div class="g-overlay">${grid}</div>${rows}<div class="g-overlay">${todayLine}${raceLine}</div></div>
+      </div>
+    </div>`;
+}
+function emptyState(msg){ return `<div class="bg-panel border border-line rounded-2xl py-16 text-center"><div class="text-3xl mb-2">🏁</div><p class="text-sm text-mute">${esc(msg)}</p></div>`; }
+
+/* ============================ ROUTAGE ============================ */
+function renderView(){ if(currentView==='board') renderBoard(); else if(currentView==='table') renderTable(); else renderGantt(); }
+function switchView(v){ currentView=v; ['board','table','gantt'].forEach(k=>document.getElementById('tab-'+k).setAttribute('aria-selected',k===v)); document.getElementById('controls').classList.toggle('hidden',v==='board'); renderView(); }
+function renderAll(){
+  document.getElementById('admin-panel').classList.toggle('hidden', !isAdmin);
+  if(isAdmin){ const rn=document.getElementById('race-name'),rd=document.getElementById('race-date'); if(document.activeElement!==rn) rn.value=race.name||''; if(document.activeElement!==rd) rd.value=race.date||''; }
+  renderHero(); renderView(); populateDeptControls(); renderDeptManager();
+}
+function populateDeptControls(){
+  const names=projectData.map(s=>s.rubrique);
+  if(filters.dept!=='ALL' && !names.includes(filters.dept)) filters.dept='ALL';
+  document.getElementById('rub-list').innerHTML=names.map(n=>`<option value="${esc(n)}">`).join('');
+  const sel=document.getElementById('fltDept'),keep=filters.dept;
+  sel.innerHTML=`<option value="ALL">Tous départements</option>`+names.map(n=>`<option${n===keep?' selected':''}>${esc(n)}</option>`).join('');
+}
+
+/* ============================ DÉPARTEMENTS (CRUD) ============================ */
+function renderDeptManager(){
+  const el=document.getElementById('dept-manager'); if(!el) return;
+  if(el.contains(document.activeElement)) return; // ne pas écraser une saisie en cours
+  if(!projectData.length){ el.innerHTML='<p class="text-xs text-mute">Aucun département — ajoutes-en un ci-dessous.</p>'; return; }
+  const last=projectData.length-1;
+  el.innerHTML=projectData.map((sec,i)=>`
+    <div class="flex items-center gap-2">
+      <input class="in flex-1" value="${esc(sec.rubrique)}" aria-label="Nom du département" onchange="renameDept(${sec.id}, this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+      <span class="badge bg-surface text-mute border-line shrink-0" title="Nombre de tâches">${sec.tasks.length}</span>
+      <button class="btn !px-2.5 !py-2 disabled:opacity-40 disabled:pointer-events-none" onclick="moveDept(${sec.id},-1)" ${i===0?'disabled':''} title="Monter" aria-label="Monter">↑</button>
+      <button class="btn !px-2.5 !py-2 disabled:opacity-40 disabled:pointer-events-none" onclick="moveDept(${sec.id},1)" ${i===last?'disabled':''} title="Descendre" aria-label="Descendre">↓</button>
+      <button class="btn !px-2.5 !py-2 !text-rosso" onclick="deleteDept(${sec.id})" title="Supprimer" aria-label="Supprimer">🗑️</button>
+    </div>`).join('');
+}
+const deptExists=(name,exceptId)=> projectData.some(s=> s.id!==exceptId && s.rubrique.trim().toLowerCase()===name.trim().toLowerCase());
+async function ensureDepartment(name){
+  const found=projectData.find(s=>s.rubrique.toLowerCase()===name.toLowerCase());
+  if(found) return found.id;
+  const pos=projectData.length?Math.max(...projectData.map(s=>s.position||0))+1:0;
+  const { data, error }=await sb.from('departments').insert({ name, position:pos }).select('id').single();
+  if(error) throw error; return data.id;
+}
+async function renameDept(id, val){
+  const name=(val||'').trim();
+  if(!name){ alert("Le nom d’un département ne peut pas être vide."); renderDeptManager(); return; }
+  if(deptExists(name,id)){ alert("Un département porte déjà ce nom."); renderDeptManager(); return; }
+  if(filters.dept){ const cur=projectData.find(s=>s.id===id); if(cur && filters.dept===cur.rubrique) filters.dept=name; }
+  const { error }=await sb.from('departments').update({ name }).eq('id',id);
+  if(error){ alert('Erreur : '+error.message); } else { await loadData(); renderAll(); }
+}
+async function moveDept(id, dir){
+  const i=projectData.findIndex(s=>s.id===id), j=i+dir; if(i<0||j<0||j>=projectData.length) return;
+  const a=projectData[i], b=projectData[j];
+  try{ await sb.from('departments').update({position:b.position}).eq('id',a.id); await sb.from('departments').update({position:a.position}).eq('id',b.id); resetForm(); await loadData(); renderAll(); }
+  catch(err){ alert('Erreur : '+err.message); }
+}
+async function addDept(){
+  const inp=document.getElementById('new-dept'), name=inp.value.trim();
+  if(!name){ inp.focus(); return; }
+  if(deptExists(name,null)){ alert("Ce département existe déjà."); return; }
+  try{ await ensureDepartment(name); inp.value=''; await loadData(); renderAll(); }
+  catch(err){ alert('Erreur : '+err.message); }
+}
+async function deleteDept(id){
+  const sec=projectData.find(s=>s.id===id); if(!sec) return;
+  const n=sec.tasks.length;
+  const msg=n>0?`Supprimer « ${sec.rubrique} » et ses ${n} tâche(s) ? Action irréversible.`:`Supprimer le département « ${sec.rubrique} » ?`;
+  if(!confirm(msg)) return;
+  if(filters.dept===sec.rubrique) filters.dept='ALL';
+  const { error }=await sb.from('departments').delete().eq('id',id);
+  if(error){ alert('Erreur : '+error.message); } else { resetForm(); await loadData(); renderAll(); }
+}
+
+/* ============================ TÂCHES (CRUD) ============================ */
+async function handleFormSubmit(e){
+  e.preventDefault();
+  const rub=document.getElementById('f-rub').value.trim();
+  const start=document.getElementById('f-start').value, end=document.getElementById('f-end').value;
+  if(pDate(end)<pDate(start)){ alert("La date de fin ne peut pas précéder la date de début."); return; }
+  const payload={ name:document.getElementById('f-name').value.trim(), assignee:document.getElementById('f-assignee').value.trim()||null,
+    priority:document.getElementById('f-priority').value, start_date:start, end_date:end,
+    progress:parseInt(document.getElementById('f-progress').value,10), link:document.getElementById('f-link').value.trim()||null,
+    status:document.getElementById('f-status').value };
+  const editId=document.getElementById('edit-id').value;
+  try{
+    payload.department_id=await ensureDepartment(rub);
+    let error;
+    if(editId){ ({ error }=await sb.from('tasks').update(payload).eq('id',editId)); }
+    else      { ({ error }=await sb.from('tasks').insert(payload)); }
+    if(error) throw error;
+    resetForm(); await loadData(); renderAll();
+  }catch(err){ alert('Erreur : '+err.message); }
+}
+function editTask(id){
+  if(!isAdmin) return;
+  let task=null, deptName='';
+  for(const d of projectData){ const t=d.tasks.find(x=>x.id===id); if(t){ task=t; deptName=d.rubrique; break; } }
+  if(!task) return;
+  document.getElementById('edit-id').value=id;
+  document.getElementById('f-rub').value=deptName;
+  document.getElementById('f-name').value=task.name;
+  document.getElementById('f-assignee').value=task.assignee||'';
+  document.getElementById('f-priority').value=task.priority||'Normal';
+  document.getElementById('f-link').value=task.link||'';
+  document.getElementById('f-start').value=task.start||'';
+  document.getElementById('f-end').value=task.end||'';
+  document.getElementById('f-progress').value=task.progress; document.getElementById('range-val').innerText=task.progress;
+  document.getElementById('f-status').value=task.status;
+  document.getElementById('form-title').innerHTML='✏️ Panneau ingénieur — modifier la tâche';
+  document.getElementById('submit-btn').innerText='Enregistrer les modifications';
+  document.getElementById('cancel-btn').classList.remove('hidden');
+  document.getElementById('admin-panel').scrollIntoView({behavior:REDUCE?'auto':'smooth'});
+}
+function resetForm(){
+  document.getElementById('task-form').reset();
+  document.getElementById('edit-id').value='';
+  document.getElementById('range-val').innerText='50';
+  document.getElementById('form-title').innerHTML='⚙️ Panneau ingénieur — ajouter une tâche';
+  document.getElementById('submit-btn').innerText='+ Ajouter la tâche';
+  document.getElementById('cancel-btn').classList.add('hidden');
+}
+async function deleteTask(id){
+  if(!isAdmin) return;
+  if(!confirm("Supprimer cette intervention du carnet de bord ?")) return;
+  const { error }=await sb.from('tasks').delete().eq('id',id);
+  if(error){ alert('Erreur : '+error.message); } else { resetForm(); await loadData(); renderAll(); }
+}
+
+/* ============================ COURSE ============================ */
+async function saveRace(){
+  const name=document.getElementById('race-name').value.trim(), date=document.getElementById('race-date').value;
+  const value={ name:name||race.name, date:date||race.date };
+  const { error }=await sb.from('settings').upsert({ key:'race', value });
+  if(error){ alert('Erreur : '+error.message); } else { race=value; refreshEventLabel(); tickCountdown(); if(currentView==='gantt') renderGantt(); }
+}
+
+/* ============================ EXPORTS ============================ */
+function exportJSON(){
+  const out=projectData.map(s=>({ rubrique:s.rubrique, tasks:s.tasks.map(t=>({ name:t.name, assignee:t.assignee, priority:t.priority, start:t.start, end:t.end, progress:t.progress, link:t.link, status:t.status })) }));
+  const a=document.createElement('a'); a.href="data:application/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(out,null,2)); a.download="paddock_planning.json"; a.click();
+}
+function exportCSV(){
+  const rows=[["Departement","Intervention","Responsable","Criticite","Debut","Fin","Avancement","Statut","Lien"]];
+  projectData.forEach(s=>s.tasks.forEach(t=>rows.push([s.rubrique,t.name,t.assignee||'',t.priority||'',t.start||'',t.end||'',t.progress+'%',t.status,t.link||''])));
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const a=document.createElement('a'); a.href="data:text/csv;charset=utf-8,\uFEFF"+encodeURIComponent(csv); a.download="paddock_planning.csv"; a.click();
+}
+
+/* ============================ AUTH ============================ */
+function show(screen){
+  document.getElementById('setup-screen').classList.toggle('hidden', screen!=='setup');
+  document.getElementById('login-screen').classList.toggle('hidden', screen!=='login');
+  document.getElementById('app').classList.toggle('hidden', screen!=='app');
+  document.getElementById('user-area').classList.toggle('hidden', screen!=='app');
+}
+function renderUserArea(){
+  const el=document.getElementById('user-area'); if(!me){ el.innerHTML=''; return; }
+  const roleBadge = isAdmin ? '<span class="badge bg-rosso/15 text-rosso border-rosso/40">Ingénieur</span>' : '<span class="badge bg-info/15 text-info border-info/40">Lecture seule</span>';
+  el.innerHTML=`<span class="hidden sm:inline text-xs text-mute">${esc(me.email||'')}</span>${roleBadge}<button class="btn btn-ghost" onclick="logout()">Déconnexion</button>`;
+}
+async function doLogin(e){
+  e.preventDefault();
+  const email=document.getElementById('login-email').value.trim(), password=document.getElementById('login-pass').value;
+  const err=document.getElementById('login-error'), btn=document.getElementById('login-btn');
+  err.classList.add('hidden'); btn.disabled=true; btn.innerText='Connexion…';
+  const { data, error }=await sb.auth.signInWithPassword({ email, password });
+  btn.disabled=false; btn.innerText='Se connecter';
+  if(error){ err.innerText='Identifiants incorrects ou compte inexistant.'; err.classList.remove('hidden'); return; }
+  await afterLogin(data.session);
+}
+async function logout(){ try{ await sb.auth.signOut(); }finally{ location.reload(); } }
+async function afterLogin(session){
+  me={ id:session.user.id, email:session.user.email, role:'lecture' };
+  const { data:prof }=await sb.from('profiles').select('role,full_name,email').eq('id',me.id).maybeSingle();
+  if(prof){ me.role=prof.role; me.full_name=prof.full_name; }
+  isAdmin = me.role==='ingenieur';
+  await loadData();
+  show('app'); renderUserArea();
+  gaugeAnimated=false; renderAll(); startCountdown(); subscribeRealtime();
+}
+
+/* ============================ REALTIME ============================ */
+function subscribeRealtime(){
+  if(channel) return;
+  const reload=debounce(async ()=>{ await loadData(); refreshEventLabel(); renderAll(); }, 250);
+  channel=sb.channel('pitwall')
+    .on('postgres_changes',{event:'*',schema:'public',table:'tasks'}, reload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'departments'}, reload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'settings'}, reload)
+    .subscribe();
+}
+
+/* ============================ DÉMARRAGE ============================ */
+async function boot(){
+  if(!CONFIGURED){ show('setup'); if(!window.supabase) document.getElementById('setup-sdk').classList.remove('hidden'); return; }
+  if(!sb){ show('setup'); document.getElementById('setup-sdk').classList.remove('hidden'); return; }
+  try{
+    const { data:{ session } }=await sb.auth.getSession();
+    if(!session){ show('login'); }
+    else { await afterLogin(session); }
+    sb.auth.onAuthStateChange((_e, sess)=>{ if(!sess){ me=null; isAdmin=false; show('login'); } });
+  }catch(err){ console.error(err); show('login'); }
+}
+boot();
+</script>
+</body>
+</html>
