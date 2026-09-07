@@ -202,6 +202,20 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
         <p class="text-[11px] text-mute mt-2">Renommer répercute le changement sur toutes les tâches. Les flèches modifient l’ordre d’affichage partout.</p>
       </div>
 
+      <!-- Utilisateurs -->
+      <div class="px-5 py-4 border-b border-line">
+        <h3 class="font-display font-bold text-white text-sm mb-3 flex items-center gap-2">👥 Utilisateurs</h3>
+        <div id="user-manager" class="space-y-2"></div>
+        <form id="user-form" onsubmit="addUser(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 mt-3 items-end">
+          <div class="lg:col-span-2"><label class="block text-xs text-mute mb-1">E-mail</label><input id="u-email" type="email" class="in" autocomplete="off" required></div>
+          <div><label class="block text-xs text-mute mb-1">Nom</label><input id="u-name" class="in" autocomplete="off"></div>
+          <div><label class="block text-xs text-mute mb-1">Mot de passe</label><div class="flex gap-1"><input id="u-pass" type="password" class="in" minlength="6" autocomplete="new-password" required><button type="button" class="btn !px-2" onclick="genPassword()" title="Générer un mot de passe">🎲</button></div></div>
+          <div><label class="block text-xs text-mute mb-1">Rôle</label><select id="u-role" class="in"><option value="lecture">Lecture</option><option value="ingenieur">Ingénieur</option></select></div>
+          <button id="u-submit" type="submit" class="btn btn-primary">+ Créer</button>
+        </form>
+        <p class="text-[11px] text-mute mt-2">La création passe par la fonction Edge <code class="text-info">manage-users</code> (voir instructions). Le compte est actif immédiatement, sans e-mail de confirmation.</p>
+      </div>
+
       <!-- Formulaire tâche -->
       <form id="task-form" onsubmit="handleFormSubmit(event)" class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
         <input type="hidden" id="edit-id">
@@ -302,6 +316,7 @@ if (CONFIGURED && window.supabase) sb = window.supabase.createClient(SUPABASE_UR
 let projectData = [];
 let race = { name:'—', date:'' };
 let me = null, isAdmin = false;
+let users = [];
 let currentView = 'board';
 let filters = { q:'', status:'ALL', priority:'ALL', dept:'ALL', sort:'date' };
 let gaugeAnimated = false, gaugeShown = 0;
@@ -516,7 +531,7 @@ function switchView(v){ currentView=v; ['board','table','gantt'].forEach(k=>docu
 function renderAll(){
   document.getElementById('admin-panel').classList.toggle('hidden', !isAdmin);
   if(isAdmin){ const rn=document.getElementById('race-name'),rd=document.getElementById('race-date'); if(document.activeElement!==rn) rn.value=race.name||''; if(document.activeElement!==rd) rd.value=race.date||''; }
-  renderHero(); renderView(); populateDeptControls(); renderDeptManager();
+  renderHero(); renderView(); populateDeptControls(); renderDeptManager(); renderUsers();
 }
 function populateDeptControls(){
   const names=projectData.map(s=>s.rubrique);
@@ -578,6 +593,68 @@ async function deleteDept(id){
   if(filters.dept===sec.rubrique) filters.dept='ALL';
   const { error }=await sb.from('departments').delete().eq('id',id);
   if(error){ alert('Erreur : '+error.message); } else { resetForm(); await loadData(); renderAll(); }
+}
+
+/* ============================ UTILISATEURS (ingénieur) ============================ */
+async function loadUsers(){
+  const { data, error }=await sb.from('profiles').select('id,email,full_name,role').order('email');
+  if(!error) users=data||[];
+}
+function renderUsers(){
+  const el=document.getElementById('user-manager'); if(!el || !isAdmin) return;
+  if(el.contains(document.activeElement)) return;
+  if(!users.length){ el.innerHTML='<p class="text-xs text-mute">Aucun utilisateur chargé.</p>'; return; }
+  el.innerHTML=users.map(u=>{
+    const self = me && u.id===me.id;
+    return `<div class="flex items-center gap-2">
+      <div class="flex-1 min-w-0"><div class="text-sm text-ink truncate">${esc(u.full_name||u.email||'—')} ${self?'<span class="text-mute">(vous)</span>':''}</div><div class="text-xs text-mute truncate">${esc(u.email||'')}</div></div>
+      <select class="in w-auto" ${self?'disabled':''} onchange="setUserRole('${u.id}', this.value)">
+        <option value="lecture"${u.role!=='ingenieur'?' selected':''}>Lecture</option>
+        <option value="ingenieur"${u.role==='ingenieur'?' selected':''}>Ingénieur</option>
+      </select>
+      <button class="btn !px-2.5 !py-2 !text-rosso disabled:opacity-40 disabled:pointer-events-none" ${self?'disabled':''} onclick="deleteUser('${u.id}','${esc(u.email||'')}')" title="Supprimer" aria-label="Supprimer">🗑️</button>
+    </div>`;
+  }).join('');
+}
+async function callManageUsers(payload){
+  const { data, error }=await sb.functions.invoke('manage-users', { body:payload });
+  if(error){
+    let msg=error.message;
+    try{ const ctx=await error.context?.json?.(); if(ctx?.error) msg=ctx.error; }catch(_){}
+    return { ok:false, error:msg };
+  }
+  return data || { ok:false, error:'Réponse vide.' };
+}
+async function addUser(e){
+  e.preventDefault();
+  const email=document.getElementById('u-email').value.trim();
+  const full_name=document.getElementById('u-name').value.trim();
+  const password=document.getElementById('u-pass').value;
+  const role=document.getElementById('u-role').value;
+  const btn=document.getElementById('u-submit'); btn.disabled=true; btn.innerText='Création…';
+  const res=await callManageUsers({ action:'create', email, full_name, password, role });
+  btn.disabled=false; btn.innerText='+ Créer';
+  if(!res.ok){ alert('Erreur : '+res.error); return; }
+  document.getElementById('user-form').reset();
+  await loadUsers(); renderUsers();
+  alert('Utilisateur créé.');
+}
+async function setUserRole(id, role){
+  const res=await callManageUsers({ action:'set_role', user_id:id, role });
+  if(!res.ok) alert('Erreur : '+res.error);
+  await loadUsers(); renderUsers();
+}
+async function deleteUser(id, email){
+  if(!confirm(`Supprimer le compte ${email||''} ? Action irréversible.`)) return;
+  const res=await callManageUsers({ action:'delete', user_id:id });
+  if(!res.ok){ alert('Erreur : '+res.error); return; }
+  await loadUsers(); renderUsers();
+}
+function genPassword(){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+  const a=crypto.getRandomValues(new Uint32Array(14)); let p='';
+  for(let i=0;i<14;i++) p+=chars[a[i]%chars.length];
+  const f=document.getElementById('u-pass'); f.value=p; f.type='text';
 }
 
 /* ============================ TÂCHES (CRUD) ============================ */
@@ -684,6 +761,7 @@ async function afterLogin(session){
   if(prof){ me.role=prof.role; me.full_name=prof.full_name; }
   isAdmin = me.role==='ingenieur';
   await loadData();
+  if(isAdmin) await loadUsers();
   show('app'); renderUserArea();
   gaugeAnimated=false; renderAll(); startCountdown(); subscribeRealtime();
 }
