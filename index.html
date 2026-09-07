@@ -210,7 +210,7 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
           <div class="lg:col-span-2"><label class="block text-xs text-mute mb-1">E-mail</label><input id="u-email" type="email" class="in" autocomplete="off" required></div>
           <div><label class="block text-xs text-mute mb-1">Nom</label><input id="u-name" class="in" autocomplete="off"></div>
           <div><label class="block text-xs text-mute mb-1">Mot de passe</label><div class="flex gap-1"><input id="u-pass" type="password" class="in" minlength="6" autocomplete="new-password" required><button type="button" class="btn !px-2" onclick="genPassword()" title="Générer un mot de passe">🎲</button></div></div>
-          <div><label class="block text-xs text-mute mb-1">Rôle</label><select id="u-role" class="in"><option value="lecture">Lecture</option><option value="ingenieur">Ingénieur</option></select></div>
+          <div><label class="block text-xs text-mute mb-1">Rôle</label><select id="u-role" class="in"><option value="lecture">Lecture</option><option value="contributeur">Contributeur</option><option value="ingenieur">Ingénieur</option></select></div>
           <button id="u-submit" type="submit" class="btn btn-primary">+ Créer</button>
         </form>
         <p class="text-[11px] text-mute mt-2">La création passe par la fonction Edge <code class="text-info">manage-users</code> (voir instructions). Le compte est actif immédiatement, sans e-mail de confirmation.</p>
@@ -324,6 +324,7 @@ let cdTimer = null, channel = null;
 
 const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const C = { rosso:'#E10600', amber:'#F5A623', go:'#2ED47A', info:'#4C86E0', mute:'#8B98A8', line:'#2A333F' };
+function canEditLink(){ return !!(me && (me.role==='ingenieur' || me.role==='contributeur')); }
 
 /* ============================ HELPERS ============================ */
 const esc = (s='')=> String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
@@ -485,7 +486,11 @@ function renderTable(){
             <td class="py-3.5 px-5"><div class="flex items-center gap-2"><div class="bar flex-1"><i style="width:${t.progress}%"></i></div><span class="font-display tnum text-mute w-9 text-right">${t.progress}%</span></div></td>
             <td class="py-3.5 px-5 text-right whitespace-nowrap">
               ${t.link?`<a href="${esc(t.link)}" target="_blank" rel="noopener" class="text-info hover:underline">Suivi</a>`:''}
-              ${isAdmin?`<button onclick="editTask(${t.id})" class="ml-2 text-amber hover:bg-amber/10 rounded-md px-1.5 py-1" title="Modifier" aria-label="Modifier">✏️</button><button onclick="deleteTask(${t.id})" class="text-rosso hover:bg-rosso/10 rounded-md px-1.5 py-1" title="Supprimer" aria-label="Supprimer">🗑️</button>`:''}
+              ${isAdmin
+                ? `<button onclick="editTask(${t.id})" class="ml-2 text-amber hover:bg-amber/10 rounded-md px-1.5 py-1" title="Modifier" aria-label="Modifier">✏️</button><button onclick="deleteTask(${t.id})" class="text-rosso hover:bg-rosso/10 rounded-md px-1.5 py-1" title="Supprimer" aria-label="Supprimer">🗑️</button>`
+                : (me && me.role==='contributeur')
+                  ? `<button onclick="editLink(${t.id})" class="ml-2 text-info hover:bg-info/10 rounded-md px-2 py-1" title="Ajouter / modifier le lien de suivi">🔗 Lien</button>`
+                  : ''}
             </td>
           </tr>`).join('')}</tbody>
       </table></div>
@@ -609,7 +614,8 @@ function renderUsers(){
     return `<div class="flex items-center gap-2">
       <div class="flex-1 min-w-0"><div class="text-sm text-ink truncate">${esc(u.full_name||u.email||'—')} ${self?'<span class="text-mute">(vous)</span>':''}</div><div class="text-xs text-mute truncate">${esc(u.email||'')}</div></div>
       <select class="in w-auto" ${self?'disabled':''} onchange="setUserRole('${u.id}', this.value)">
-        <option value="lecture"${u.role!=='ingenieur'?' selected':''}>Lecture</option>
+        <option value="lecture"${u.role==='lecture'?' selected':''}>Lecture</option>
+        <option value="contributeur"${u.role==='contributeur'?' selected':''}>Contributeur</option>
         <option value="ingenieur"${u.role==='ingenieur'?' selected':''}>Ingénieur</option>
       </select>
       <button class="btn !px-2.5 !py-2 !text-rosso disabled:opacity-40 disabled:pointer-events-none" ${self?'disabled':''} onclick="deleteUser('${u.id}','${esc(u.email||'')}')" title="Supprimer" aria-label="Supprimer">🗑️</button>
@@ -711,6 +717,16 @@ async function deleteTask(id){
   const { error }=await sb.from('tasks').delete().eq('id',id);
   if(error){ alert('Erreur : '+error.message); } else { resetForm(); await loadData(); renderAll(); }
 }
+async function editLink(id){
+  if(!canEditLink()) return;
+  let task=null; for(const d of projectData){ const t=d.tasks.find(x=>x.id===id); if(t){ task=t; break; } }
+  if(!task) return;
+  const url=prompt("Lien de suivi (Git, Jira, télémétrie) :", task.link||'');
+  if(url===null) return;                 // annulé
+  const link=url.trim()||null;
+  const { error }=await sb.from('tasks').update({ link }).eq('id',id);
+  if(error){ alert('Erreur : '+error.message); } else { await loadData(); renderAll(); }
+}
 
 /* ============================ COURSE ============================ */
 async function saveRace(){
@@ -741,7 +757,8 @@ function show(screen){
 }
 function renderUserArea(){
   const el=document.getElementById('user-area'); if(!me){ el.innerHTML=''; return; }
-  const roleBadge = isAdmin ? '<span class="badge bg-rosso/15 text-rosso border-rosso/40">Ingénieur</span>' : '<span class="badge bg-info/15 text-info border-info/40">Lecture seule</span>';
+  const badges={ ingenieur:'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Ingénieur</span>', contributeur:'<span class="badge bg-amber/15 text-amber border-amber/40">Contributeur</span>', lecture:'<span class="badge bg-info/15 text-info border-info/40">Lecture seule</span>' };
+  const roleBadge = badges[me.role] || badges.lecture;
   el.innerHTML=`<span class="hidden sm:inline text-xs text-mute">${esc(me.email||'')}</span>${roleBadge}<button class="btn btn-ghost" onclick="logout()">Déconnexion</button>`;
 }
 async function doLogin(e){
