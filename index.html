@@ -596,7 +596,8 @@ function renderDeptManager(){
   el.innerHTML=projectData.map((sec,i)=>`
     <div class="flex items-center gap-2">
       <input class="in flex-1" value="${esc(sec.rubrique)}" aria-label="Nom du département" onchange="renameDept(${sec.id}, this.value)" onkeydown="if(event.key==='Enter')this.blur()">
-      <span class="badge bg-surface text-mute border-line shrink-0" title="Nombre de tâches">${sec.tasks.length}</span>
+      <span class="badge bg-surface text-mute border-line shrink-0" title="Tâches">📋 ${sec.tasks.length}</span>
+      <span class="badge bg-surface text-mute border-line shrink-0" title="Membres affiliés">👤 ${users.filter(u=>u.department_id===sec.id).length}</span>
       <button class="btn !px-2.5 !py-2 disabled:opacity-40 disabled:pointer-events-none" onclick="moveDept(${sec.id},-1)" ${i===0?'disabled':''} title="Monter" aria-label="Monter">↑</button>
       <button class="btn !px-2.5 !py-2 disabled:opacity-40 disabled:pointer-events-none" onclick="moveDept(${sec.id},1)" ${i===last?'disabled':''} title="Descendre" aria-label="Descendre">↓</button>
       <button class="btn !px-2.5 !py-2 !text-rosso" onclick="deleteDept(${sec.id})" title="Supprimer" aria-label="Supprimer">🗑️</button>
@@ -643,7 +644,7 @@ async function deleteDept(id){
 
 /* ============================ UTILISATEURS (ingénieur) ============================ */
 async function loadUsers(){
-  const { data, error }=await sb.from('profiles').select('id,email,full_name,role').order('email');
+  const { data, error }=await sb.from('profiles').select('id,email,full_name,role,department_id').order('email');
   if(!error) users=data||[];
 }
 function renderUsers(){
@@ -652,9 +653,13 @@ function renderUsers(){
   if(!users.length){ el.innerHTML='<p class="text-xs text-mute">Aucun utilisateur chargé.</p>'; return; }
   el.innerHTML=users.map(u=>{
     const self = me && u.id===me.id;
-    return `<div class="flex items-center gap-2">
-      <div class="flex-1 min-w-0"><div class="text-sm text-ink truncate">${esc(u.full_name||u.email||'—')} ${self?'<span class="text-mute">(vous)</span>':''}</div><div class="text-xs text-mute truncate">${esc(u.email||'')}</div></div>
-      <select class="in w-auto" ${self?'disabled':''} onchange="setUserRole('${u.id}', this.value)">
+    return `<div class="flex flex-wrap items-center gap-2">
+      <div class="flex-1 min-w-[180px]"><div class="text-sm text-ink truncate">${esc(u.full_name||u.email||'—')} ${self?'<span class="text-mute">(vous)</span>':''}</div><div class="text-xs text-mute truncate">${esc(u.email||'')}</div></div>
+      <select class="in w-auto" onchange="setUserDepartment('${u.id}', this.value)" title="Département">
+        <option value="">Aucun département</option>
+        ${projectData.map(d=>`<option value="${d.id}"${u.department_id===d.id?' selected':''}>${esc(d.rubrique)}</option>`).join('')}
+      </select>
+      <select class="in w-auto" ${self?'disabled':''} onchange="setUserRole('${u.id}', this.value)" title="Rôle">
         <option value="lecture"${u.role==='lecture'?' selected':''}>Lecture</option>
         <option value="contributeur"${u.role==='contributeur'?' selected':''}>Contributeur</option>
         <option value="ingenieur"${u.role==='ingenieur'?' selected':''}>Ingénieur</option>
@@ -690,6 +695,12 @@ async function setUserRole(id, role){
   const res=await callManageUsers({ action:'set_role', user_id:id, role });
   if(!res.ok) alert('Erreur : '+res.error);
   await loadUsers(); renderUsers();
+}
+async function setUserDepartment(id, value){
+  const department_id = value==='' ? null : Number(value);
+  const res=await callManageUsers({ action:'set_department', user_id:id, department_id });
+  if(!res.ok) alert('Erreur : '+res.error);
+  await loadUsers(); renderUsers(); renderDeptManager();
 }
 async function deleteUser(id, email){
   if(!confirm(`Supprimer le compte ${email||''} ? Action irréversible.`)) return;
