@@ -264,6 +264,10 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
             <option value="Prêt / Validé">Prêt / Validé</option>
           </select>
         </div>
+        <div class="md:col-span-3">
+          <label class="block text-xs text-mute mb-1">Description (optionnel)</label>
+          <textarea id="f-desc" rows="3" class="in" placeholder="Détails, contexte, procédure…"></textarea>
+        </div>
         <div class="md:col-span-3 flex items-center gap-2">
           <input type="checkbox" id="f-linkopen" class="accent-amber w-4 h-4">
           <label for="f-linkopen" class="text-xs text-mute">Ouvrir le lien de suivi à la contribution (un contributeur pourra le renseigner)</label>
@@ -321,6 +325,7 @@ let projectData = [];
 let race = { name:'—', date:'' };
 let me = null, isAdmin = false;
 let users = [];
+let expanded = new Set();
 let currentView = 'board';
 let filters = { q:'', status:'ALL', priority:'ALL', dept:'ALL', sort:'date' };
 let gaugeAnimated = false, gaugeShown = 0;
@@ -341,21 +346,23 @@ const pWeight = p => ({Critique:3,Important:2,Normal:1}[p]||0);
 const prioColor = p => p==='Critique'?C.rosso : p==='Important'?C.amber : C.info;
 const debounce = (fn,ms)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
 const mapTask = t => ({ id:t.id, department_id:t.department_id, name:t.name, assignee:t.assignee,
-  priority:t.priority||'Normal', start:t.start_date, end:t.end_date, progress:t.progress??0, link:t.link, link_open:!!t.link_open, status:t.status||'À planifier' });
+  priority:t.priority||'Normal', start:t.start_date, end:t.end_date, progress:t.progress??0, link:t.link, link_open:!!t.link_open, description:t.description||'', status:t.status||'À planifier' });
 
 function statusBadge(s){ const m={ 'Prêt / Validé':['bg-go/15','text-go','border-go/40'],'En cours':['bg-amber/15','text-amber','border-amber/40'],'À planifier':['bg-panel2','text-mute','border-line'] }[s]||['bg-panel2','text-mute','border-line']; return `<span class="badge ${m[0]} ${m[1]} ${m[2]}">${esc(s)}</span>`; }
 function prioBadge(p){ const m={ 'Critique':['bg-rosso/15','text-rosso','border-rosso/40'],'Important':['bg-amber/15','text-amber','border-amber/40'],'Normal':['bg-info/15','text-info','border-info/40'] }[p]||['bg-info/15','text-info','border-info/40']; return `<span class="badge ${m[0]} ${m[1]} ${m[2]}">${esc(p||'Normal')}</span>`; }
 
 /* ============================ ACCÈS DONNÉES (Supabase) ============================ */
 async function loadData(){
-  const [d, t, r] = await Promise.all([
+  const [d, t, st, r] = await Promise.all([
     sb.from('departments').select('*').order('position'),
     sb.from('tasks').select('*').order('id'),
+    sb.from('subtasks').select('*').order('position'),
     sb.from('settings').select('value').eq('key','race').maybeSingle()
   ]);
-  if(d.error) console.error(d.error); if(t.error) console.error(t.error);
+  if(d.error) console.error(d.error); if(t.error) console.error(t.error); if(st.error) console.error(st.error);
+  const subByTask={}; (st.data||[]).forEach(s=>{ (subByTask[s.task_id] ||= []).push(s); });
   const byDept = {};
-  (t.data||[]).forEach(x=>{ (byDept[x.department_id] ||= []).push(mapTask(x)); });
+  (t.data||[]).forEach(x=>{ const mt=mapTask(x); mt.subtasks=subByTask[x.id]||[]; (byDept[x.department_id] ||= []).push(mt); });
   projectData = (d.data||[]).map(dep=>({ id:dep.id, rubrique:dep.name, position:dep.position, tasks:(byDept[dep.id]||[]) }));
   if(r && r.data && r.data.value) race = r.data.value;
 }
@@ -480,9 +487,14 @@ function renderTable(){
         <thead class="text-mute border-b border-line"><tr>
           <th class="py-3 px-5 font-semibold">Intervention</th><th class="py-3 px-5 font-semibold">Responsable</th><th class="py-3 px-5 font-semibold">Criticité</th><th class="py-3 px-5 font-semibold">Planning</th><th class="py-3 px-5 font-semibold">Statut</th><th class="py-3 px-5 font-semibold w-40">Avancement</th><th class="py-3 px-5 font-semibold text-right">Actions</th>
         </tr></thead>
-        <tbody class="divide-y divide-line">${sec.tasks.map(t=>`
+        <tbody class="divide-y divide-line">${sec.tasks.map(t=>{
+          const subs=t.subtasks||[]; const total=subs.length, done=subs.filter(s=>s.done).length; const open=expanded.has(t.id);
+          const main=`
           <tr class="${isLate(t)?'overdue-row':''}">
-            <td class="py-3.5 px-5 font-semibold text-ink">${esc(t.name)} ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1">retard</span>':''}${t.link_open?'<span class="badge bg-amber/15 text-amber border-amber/40 ml-1">🔓 contrib.</span>':''}</td>
+            <td class="py-3.5 px-5 font-semibold text-ink">
+              <button onclick="toggleExpand(${t.id})" class="text-mute hover:text-ink mr-1" title="Détails" aria-label="Afficher les détails">${open?'▾':'▸'}</button>
+              ${esc(t.name)} ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1">retard</span>':''}${t.link_open?'<span class="badge bg-amber/15 text-amber border-amber/40 ml-1">🔓 contrib.</span>':''}${total?`<span class="badge bg-panel2 text-mute border-line ml-1">☑ ${done}/${total}</span>`:''}
+            </td>
             <td class="py-3.5 px-5 text-mute">${esc(t.assignee||'Non assigné')}</td>
             <td class="py-3.5 px-5">${prioBadge(t.priority)}</td>
             <td class="py-3.5 px-5 text-mute font-display tnum whitespace-nowrap">${fmtDM(t.start)} → ${fmtDM(t.end)}</td>
@@ -498,7 +510,30 @@ function renderTable(){
                       : `<span class="ml-2 text-mute px-2 py-1 inline-block" title="Ouvert par l'ingénieur uniquement">🔒</span>`)
                   : ''}
             </td>
-          </tr>`).join('')}</tbody>
+          </tr>`;
+          const detail = open ? `
+          <tr class="bg-track/40">
+            <td colspan="7" class="px-5 py-4">
+              <div class="grid md:grid-cols-2 gap-5">
+                <div>
+                  <div class="text-xs text-mute mb-1">Description</div>
+                  <div class="text-sm text-ink whitespace-pre-wrap">${t.description?esc(t.description):'<span class="text-mute">Aucune description.</span>'}</div>
+                </div>
+                <div>
+                  <div class="text-xs text-mute mb-1">Sous-tâches ${total?`(${done}/${total})`:''}</div>
+                  <div class="space-y-1.5">${subs.length?subs.map(s=>`
+                    <label class="flex items-center gap-2 text-sm">
+                      <input type="checkbox" ${s.done?'checked':''} ${isAdmin?'':'disabled'} onchange="toggleSubtask(${s.id}, this.checked)" class="accent-go w-4 h-4">
+                      <span class="${s.done?'line-through text-mute':'text-ink'}">${esc(s.title)}</span>
+                      ${isAdmin?`<button onclick="deleteSubtask(${s.id})" class="ml-auto text-rosso hover:bg-rosso/10 rounded px-1.5" title="Supprimer">✕</button>`:''}
+                    </label>`).join(''):'<span class="text-mute text-sm">Aucune sous-tâche.</span>'}</div>
+                  ${isAdmin?`<div class="flex gap-2 mt-2"><input id="sub-input-${t.id}" class="in flex-1" placeholder="Nouvelle sous-tâche…" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtask(${t.id});}"><button class="btn" onclick="addSubtask(${t.id})">+ Ajouter</button></div>`:''}
+                </div>
+              </div>
+            </td>
+          </tr>` : '';
+          return main + detail;
+        }).join('')}</tbody>
       </table></div>
     </div>`).join('');
 }
@@ -678,7 +713,7 @@ async function handleFormSubmit(e){
   const payload={ name:document.getElementById('f-name').value.trim(), assignee:document.getElementById('f-assignee').value.trim()||null,
     priority:document.getElementById('f-priority').value, start_date:start, end_date:end,
     progress:parseInt(document.getElementById('f-progress').value,10), link:document.getElementById('f-link').value.trim()||null,
-    status:document.getElementById('f-status').value, link_open:document.getElementById('f-linkopen').checked };
+    status:document.getElementById('f-status').value, link_open:document.getElementById('f-linkopen').checked, description:document.getElementById('f-desc').value.trim()||null };
   const editId=document.getElementById('edit-id').value;
   try{
     payload.department_id=await ensureDepartment(rub);
@@ -705,6 +740,7 @@ function editTask(id){
   document.getElementById('f-progress').value=task.progress; document.getElementById('range-val').innerText=task.progress;
   document.getElementById('f-status').value=task.status;
   document.getElementById('f-linkopen').checked=!!task.link_open;
+  document.getElementById('f-desc').value=task.description||'';
   document.getElementById('form-title').innerHTML='✏️ Panneau ingénieur — modifier la tâche';
   document.getElementById('submit-btn').innerText='Enregistrer les modifications';
   document.getElementById('cancel-btn').classList.remove('hidden');
@@ -738,6 +774,25 @@ async function editLink(id){
 async function toggleLinkOpen(id, open){
   if(!isAdmin) return;
   const { error }=await sb.from('tasks').update({ link_open: open }).eq('id',id);
+  if(error){ alert('Erreur : '+error.message); } else { await loadData(); renderAll(); }
+}
+function toggleExpand(id){ expanded.has(id)?expanded.delete(id):expanded.add(id); renderView(); }
+async function addSubtask(taskId){
+  if(!isAdmin) return;
+  const inp=document.getElementById('sub-input-'+taskId); const title=(inp?inp.value:'').trim();
+  if(!title) return;
+  const { error }=await sb.from('subtasks').insert({ task_id:taskId, title });
+  if(error){ alert('Erreur : '+error.message); } else { expanded.add(taskId); await loadData(); renderAll(); }
+}
+async function toggleSubtask(id, done){
+  if(!isAdmin) return;
+  const { error }=await sb.from('subtasks').update({ done }).eq('id',id);
+  if(error){ alert('Erreur : '+error.message); await loadData(); renderAll(); }
+  else { await loadData(); renderAll(); }
+}
+async function deleteSubtask(id){
+  if(!isAdmin) return;
+  const { error }=await sb.from('subtasks').delete().eq('id',id);
   if(error){ alert('Erreur : '+error.message); } else { await loadData(); renderAll(); }
 }
 
@@ -802,6 +857,7 @@ function subscribeRealtime(){
   const reload=debounce(async ()=>{ await loadData(); refreshEventLabel(); renderAll(); }, 250);
   channel=sb.channel('pitwall')
     .on('postgres_changes',{event:'*',schema:'public',table:'tasks'}, reload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'subtasks'}, reload)
     .on('postgres_changes',{event:'*',schema:'public',table:'departments'}, reload)
     .on('postgres_changes',{event:'*',schema:'public',table:'settings'}, reload)
     .subscribe();
