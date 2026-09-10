@@ -229,8 +229,8 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
           <input id="f-name" class="in" placeholder="Ex : Révision turbo & cartographie" required>
         </div>
         <div>
-          <label class="block text-xs text-mute mb-1">Responsable / mécanicien</label>
-          <input id="f-assignee" class="in" placeholder="Ex : Marc (moteur)">
+          <label class="block text-xs text-mute mb-1">Responsable</label>
+          <select id="f-assignee" class="in"><option value="">Non assigné</option></select>
         </div>
         <div>
           <label class="block text-xs text-mute mb-1">Lien de suivi (Git, Jira, télémétrie)</label>
@@ -334,6 +334,9 @@ let cdTimer = null, channel = null;
 const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const C = { rosso:'#E10600', amber:'#F5A623', go:'#2ED47A', info:'#4C86E0', mute:'#8B98A8', line:'#2A333F' };
 function canEditLink(){ return !!(me && (me.role==='ingenieur' || me.role==='contributeur')); }
+function deptName(id){ const d=projectData.find(x=>x.id===id); return d?d.rubrique:''; }
+function userLabel(u){ const dn=deptName(u.department_id); return (u.full_name||u.email||'—')+(dn?` — ${dn}`:''); }
+function assigneeLabel(t){ if(t.assignee_id){ const u=users.find(x=>x.id===t.assignee_id); return u?(u.full_name||u.email):'Assigné'; } return t.assignee||'Non assigné'; }
 
 /* ============================ HELPERS ============================ */
 const esc = (s='')=> String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
@@ -345,7 +348,7 @@ const fmtDM  = s => { const d=pDate(s); return d ? String(d.getDate()).padStart(
 const pWeight = p => ({Critique:3,Important:2,Normal:1}[p]||0);
 const prioColor = p => p==='Critique'?C.rosso : p==='Important'?C.amber : C.info;
 const debounce = (fn,ms)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
-const mapTask = t => ({ id:t.id, department_id:t.department_id, name:t.name, assignee:t.assignee,
+const mapTask = t => ({ id:t.id, department_id:t.department_id, name:t.name, assignee:t.assignee, assignee_id:t.assignee_id||null,
   priority:t.priority||'Normal', start:t.start_date, end:t.end_date, progress:t.progress??0, link:t.link, link_open:!!t.link_open, description:t.description||'', status:t.status||'À planifier' });
 
 function statusBadge(s){ const m={ 'Prêt / Validé':['bg-go/15','text-go','border-go/40'],'En cours':['bg-amber/15','text-amber','border-amber/40'],'À planifier':['bg-panel2','text-mute','border-line'] }[s]||['bg-panel2','text-mute','border-line']; return `<span class="badge ${m[0]} ${m[1]} ${m[2]}">${esc(s)}</span>`; }
@@ -457,7 +460,7 @@ function renderBoard(){
   alerts.sort((a,b)=>(b.late+b.crit)-(a.late+a.crit)||pWeight(b.t.priority)-pWeight(a.t.priority));
   const alertItems=alerts.length?alerts.map(a=>`
     <div class="flex items-center justify-between gap-3 py-2.5 border-b border-line last:border-0 ${isAdmin?'cursor-pointer hover:bg-panel2/50 px-2 -mx-2 rounded-lg':''}" ${isAdmin?`onclick="editTask(${a.t.id})"`:''}>
-      <div class="min-w-0"><div class="text-sm text-ink truncate">${esc(a.t.name)}</div><div class="text-xs text-mute truncate">${esc(a.t.assignee||'Non assigné')} · échéance ${fmtDM(a.t.end)}</div></div>
+      <div class="min-w-0"><div class="text-sm text-ink truncate">${esc(a.t.name)}</div><div class="text-xs text-mute truncate">${esc(assigneeLabel(a.t))} · échéance ${fmtDM(a.t.end)}</div></div>
       <div class="flex items-center gap-1.5 shrink-0">${a.crit?'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Bloquant</span>':''}${a.late?'<span class="badge bg-amber/15 text-amber border-amber/40">En retard</span>':''}</div>
     </div>`).join('') : `<div class="text-sm text-mute py-6 text-center">Aucun point bloquant. La voiture avance selon le plan. 🟢</div>`;
 
@@ -495,7 +498,7 @@ function renderTable(){
               <button onclick="toggleExpand(${t.id})" class="text-mute hover:text-ink mr-1" title="Détails" aria-label="Afficher les détails">${open?'▾':'▸'}</button>
               ${esc(t.name)} ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1">retard</span>':''}${t.link_open?'<span class="badge bg-amber/15 text-amber border-amber/40 ml-1">🔓 contrib.</span>':''}${total?`<span class="badge bg-panel2 text-mute border-line ml-1">☑ ${done}/${total}</span>`:''}
             </td>
-            <td class="py-3.5 px-5 text-mute">${esc(t.assignee||'Non assigné')}</td>
+            <td class="py-3.5 px-5 text-mute">${esc(assigneeLabel(t))}</td>
             <td class="py-3.5 px-5">${prioBadge(t.priority)}</td>
             <td class="py-3.5 px-5 text-mute font-display tnum whitespace-nowrap">${fmtDM(t.start)} → ${fmtDM(t.end)}</td>
             <td class="py-3.5 px-5">${statusBadge(t.status)}</td>
@@ -555,8 +558,8 @@ function renderGantt(){
   const rows=data.map(sec=>`
     <div class="mb-4"><div class="text-xs font-display font-bold text-ink bg-panel2 rounded-lg px-3 py-2 mb-2 inline-flex items-center gap-2">🏁 ${esc(sec.rubrique)}</div>
     ${sec.tasks.map(t=>{ const l=pct(pDate(t.start)),w=Math.max(1.5,pct(pDate(t.end))-l),col=prioColor(t.priority);
-      return `<div class="g-row" title="${esc(t.name)} — ${esc(t.assignee||'')}&#10;${fmtDM(t.start)} → ${fmtDM(t.end)} · ${t.progress}% · ${esc(t.status)}">
-        <div class="g-label truncate">${esc(t.name)}<br><small>${esc(t.assignee||'—')}</small></div>
+      return `<div class="g-row" title="${esc(t.name)} — ${esc(assigneeLabel(t))}&#10;${fmtDM(t.start)} → ${fmtDM(t.end)} · ${t.progress}% · ${esc(t.status)}">
+        <div class="g-label truncate">${esc(t.name)}<br><small>${esc(assigneeLabel(t))}</small></div>
         <div class="g-track"><div class="g-bar" style="left:${l.toFixed(2)}%; width:${w.toFixed(2)}%; background:${col}22; border:1px solid ${col}"><div class="fill" style="width:${t.progress}%; background:${col}"></div><span class="lab" style="color:${t.progress>55?'#0B0E13':'#E6EDF3'}">${t.progress}%</span></div></div>
       </div>`; }).join('')}</div>`).join('');
   document.getElementById('view').innerHTML=`
@@ -577,7 +580,7 @@ function switchView(v){ currentView=v; ['board','table','gantt'].forEach(k=>docu
 function renderAll(){
   document.getElementById('admin-panel').classList.toggle('hidden', !isAdmin);
   if(isAdmin){ const rn=document.getElementById('race-name'),rd=document.getElementById('race-date'); if(document.activeElement!==rn) rn.value=race.name||''; if(document.activeElement!==rd) rd.value=race.date||''; }
-  renderHero(); renderView(); populateDeptControls(); renderDeptManager(); renderUsers();
+  renderHero(); renderView(); populateDeptControls(); populateAssigneeOptions(); renderDeptManager(); renderUsers();
 }
 function populateDeptControls(){
   const names=projectData.map(s=>s.rubrique);
@@ -585,6 +588,12 @@ function populateDeptControls(){
   document.getElementById('rub-list').innerHTML=names.map(n=>`<option value="${esc(n)}">`).join('');
   const sel=document.getElementById('fltDept'),keep=filters.dept;
   sel.innerHTML=`<option value="ALL">Tous départements</option>`+names.map(n=>`<option${n===keep?' selected':''}>${esc(n)}</option>`).join('');
+}
+function populateAssigneeOptions(){
+  const sel=document.getElementById('f-assignee'); if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Non assigné</option>'+users.map(u=>`<option value="${u.id}">${esc(userLabel(u))}</option>`).join('');
+  sel.value=cur;
 }
 
 /* ============================ DÉPARTEMENTS (CRUD) ============================ */
@@ -721,7 +730,7 @@ async function handleFormSubmit(e){
   const rub=document.getElementById('f-rub').value.trim();
   const start=document.getElementById('f-start').value, end=document.getElementById('f-end').value;
   if(pDate(end)<pDate(start)){ alert("La date de fin ne peut pas précéder la date de début."); return; }
-  const payload={ name:document.getElementById('f-name').value.trim(), assignee:document.getElementById('f-assignee').value.trim()||null,
+  const payload={ name:document.getElementById('f-name').value.trim(), assignee_id:document.getElementById('f-assignee').value||null, assignee:null,
     priority:document.getElementById('f-priority').value, start_date:start, end_date:end,
     progress:parseInt(document.getElementById('f-progress').value,10), link:document.getElementById('f-link').value.trim()||null,
     status:document.getElementById('f-status').value, link_open:document.getElementById('f-linkopen').checked, description:document.getElementById('f-desc').value.trim()||null };
@@ -743,7 +752,8 @@ function editTask(id){
   document.getElementById('edit-id').value=id;
   document.getElementById('f-rub').value=deptName;
   document.getElementById('f-name').value=task.name;
-  document.getElementById('f-assignee').value=task.assignee||'';
+  populateAssigneeOptions();
+  document.getElementById('f-assignee').value=task.assignee_id||'';
   document.getElementById('f-priority').value=task.priority||'Normal';
   document.getElementById('f-link').value=task.link||'';
   document.getElementById('f-start').value=task.start||'';
@@ -857,7 +867,7 @@ async function afterLogin(session){
   if(prof){ me.role=prof.role; me.full_name=prof.full_name; }
   isAdmin = me.role==='ingenieur';
   await loadData();
-  if(isAdmin) await loadUsers();
+  await loadUsers();
   show('app'); renderUserArea();
   gaugeAnimated=false; renderAll(); startCountdown(); subscribeRealtime();
 }
