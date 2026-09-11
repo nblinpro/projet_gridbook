@@ -82,11 +82,9 @@
   .g-race{ position:absolute; top:-6px; bottom:0; width:2px; background:#E10600; }
   .g-race::after{ content:'Course'; position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-size:9px; color:#E10600; white-space:nowrap; }
 
-  /* ---- Icônes ---- */
   .ic{ width:16px; height:16px; display:inline-block; vertical-align:-3px; flex:none; }
   .ic-lg{ width:22px; height:22px; }
 
-  /* ---- Matière ---- */
   .bg-panel,.tile{ background-image:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0)); }
   .tile{ box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.3); transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
   .tile:hover{ transform:translateY(-1px); border-color:#33404f; }
@@ -96,20 +94,17 @@
   .btn:active{ transform:translateY(1px); }
   .btn-primary{ background-image:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0)); }
 
-  /* ---- Micro-animations ---- */
   .bar > i{ transition: width .6s cubic-bezier(.22,1,.36,1); }
   tbody tr{ transition: background .12s ease; }
   @keyframes fadeUp{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:none;} }
   .fade-up{ animation: fadeUp .3s ease both; }
 
-  /* ---- Chargement / squelettes ---- */
   .sk{ position:relative; overflow:hidden; background:#161d26; border-radius:10px; }
   .sk::after{ content:''; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent); animation:shimmer 1.3s infinite; }
   @keyframes shimmer{ to{ transform:translateX(100%);} }
   .spin{ width:32px; height:32px; border-radius:50%; border:3px solid #232C38; border-top-color:#E10600; animation:spin .8s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg);} }
 
-  /* ---- Listes admin (départements, utilisateurs) ---- */
   .list-row{ display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:12px; transition:background .12s ease; }
   .list-row:hover{ background:#1a212b; }
   .in-inline{ background:transparent; border-color:transparent; }
@@ -148,10 +143,10 @@
   <div id="setup-screen" class="hidden screen">
     <div class="card">
       <h2 class="font-display font-bold text-white text-lg mb-2">Connexion à Supabase requise</h2>
-      <p class="text-sm text-mute mb-4">Cette application a besoin de ta base Supabase pour partager les données entre les 14 utilisateurs. Ouvre <code class="text-info">index.html</code> et renseigne, tout en haut du script, ces deux valeurs :</p>
+      <p class="text-sm text-mute mb-4">Cette application a besoin de ta base Supabase pour partager les données entre les utilisateurs. Ouvre le script et renseigne ces deux valeurs :</p>
       <pre class="text-xs bg-track border border-line rounded-lg p-3 overflow-x-auto text-ink mb-4">const SUPABASE_URL = "https://xxxx.supabase.co";
 const SUPABASE_ANON_KEY = "eyJ...";</pre>
-      <p class="text-sm text-mute">Tu les trouves dans <b class="text-ink">Supabase &gt; Project Settings &gt; API</b> (Project URL et clé <b class="text-ink">anon public</b>). Enregistre, recharge la page.</p>
+      <p class="text-sm text-mute">Tu les trouves dans <b class="text-ink">Supabase &gt; Project Settings &gt; API</b>. Enregistre, recharge la page.</p>
       <p id="setup-sdk" class="hidden mt-4 text-sm text-amber">⚠️ Le SDK Supabase n'a pas pu se charger — vérifie ta connexion réseau puis recharge.</p>
     </div>
   </div>
@@ -201,33 +196,6 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
   <!-- APPLICATION -->
   <div id="app" class="hidden">
 
-    <!-- HERO -->
-    <section class="bg-panel hero-tex border border-line rounded-2xl p-5 md:p-6 mb-6">
-      <div class="grid grid-cols-1 lg:grid-cols-[240px,1fr] gap-6 items-center">
-        <div class="flex flex-col items-center">
-          <div id="gauge" class="w-full max-w-[240px]" role="img" aria-label="Niveau de préparation de la voiture"></div>
-        </div>
-        <div class="min-w-0">
-          <div class="text-xs text-mute mb-1">Départ&nbsp;· <span id="cd-event" class="text-ink font-semibold">—</span></div>
-          <div id="countdown" class="flex items-center gap-2 mb-5">
-            <div class="cd-seg"><span id="cd-d" class="cd-n font-display tnum text-ink">--</span><span class="cd-u">jours</span></div>
-            <span class="cd-colon">:</span>
-            <div class="cd-seg"><span id="cd-h" class="cd-n font-display tnum text-ink">--</span><span class="cd-u">heures</span></div>
-            <span class="cd-colon">:</span>
-            <div class="cd-seg"><span id="cd-m" class="cd-n font-display tnum text-ink">--</span><span class="cd-u">min</span></div>
-            <span class="cd-colon">:</span>
-            <div class="cd-seg"><span id="cd-s" class="cd-n font-display tnum text-amber">--</span><span class="cd-u">sec</span></div>
-          </div>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div class="tile"><div id="k-open"  class="tile-num font-display tnum text-ink">0</div><div class="tile-label">Tâches ouvertes</div></div>
-            <div class="tile"><div id="k-crit"  class="tile-num font-display tnum text-rosso">0</div><div class="tile-label">Points bloquants</div></div>
-            <div class="tile"><div id="k-late"  class="tile-num font-display tnum text-mute">0</div><div class="tile-label">En retard</div></div>
-            <div class="tile"><div id="k-ready" class="tile-num font-display tnum text-go">0</div><div class="tile-label">Validées</div></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- PANNEAU INGÉNIEUR -->
     <section id="admin-panel" class="hidden mb-6 bg-panel border border-line rounded-2xl overflow-hidden">
       <div class="bg-panel2 border-b border-line px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
@@ -274,7 +242,7 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
           <div><label class="block text-xs text-mute mb-1">Rôle</label><select id="u-role" class="in"><option value="lecture">Lecture</option><option value="contributeur">Contributeur</option><option value="ingenieur">Ingénieur</option></select></div>
           <button id="u-submit" type="submit" class="btn btn-primary">+ Créer</button>
         </form>
-        <p class="text-[11px] text-mute mt-2">La création passe par la fonction Edge <code class="text-info">manage-users</code> (voir instructions). Le compte est actif immédiatement, sans e-mail de confirmation.</p>
+        <p class="text-[11px] text-mute mt-2">La création passe par la fonction Edge <code class="text-info">manage-users</code>. Le compte est actif immédiatement, sans e-mail de confirmation.</p>
       </div>
 
       <!-- Formulaire tâche -->
@@ -342,10 +310,11 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
 
     <!-- Onglets + contrôles -->
     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
-      <div role="tablist" class="flex gap-2">
-        <button role="tab" id="tab-board"  aria-selected="true"  class="tab" onclick="switchView('board')"><i data-ic="layout-dashboard"></i> Tableau de bord</button>
-        <button role="tab" id="tab-table"  aria-selected="false" class="tab" onclick="switchView('table')"><i data-ic="list-checks"></i> Interventions</button>
-        <button role="tab" id="tab-gantt"  aria-selected="false" class="tab" onclick="switchView('gantt')"><i data-ic="gantt"></i> Gantt</button>
+      <div role="tablist" class="flex gap-2 overflow-x-auto pb-1">
+        <button role="tab" id="tab-pitwall" aria-selected="true"  class="tab" onclick="switchView('pitwall')"><i data-ic="flag"></i> Pit Wall</button>
+        <button role="tab" id="tab-board"   aria-selected="false" class="tab" onclick="switchView('board')"><i data-ic="layout-dashboard"></i> Tableau de bord</button>
+        <button role="tab" id="tab-table"   aria-selected="false" class="tab" onclick="switchView('table')"><i data-ic="list-checks"></i> Interventions</button>
+        <button role="tab" id="tab-gantt"   aria-selected="false" class="tab" onclick="switchView('gantt')"><i data-ic="gantt"></i> Gantt</button>
       </div>
       <div id="controls" class="hidden flex-wrap items-center gap-2">
         <input id="search" class="in max-w-[220px]" placeholder="Rechercher (tâche, responsable)…" oninput="setFilter('q', this.value)">
@@ -372,8 +341,6 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
 
 <script>
 /* ============================ CONFIG SUPABASE ============================ */
-/* ⬇️ Remplace ces deux valeurs par celles de ton projet
-   (Supabase > Project Settings > API : Project URL + clé "anon public"). */
 const SUPABASE_URL      = "https://sgilfrenddcogafvwfpz.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bybFfJUYoEhg97fDL3F34w_2oTvZ41s";
 
@@ -387,7 +354,7 @@ let race = { name:'—', date:'' };
 let me = null, isAdmin = false;
 let users = [];
 let expanded = new Set();
-let currentView = 'board';
+let currentView = 'pitwall';
 let filters = { q:'', status:'ALL', priority:'ALL', dept:'ALL', sort:'date' };
 let gaugeAnimated = false, gaugeShown = 0;
 let cdTimer = null, channel = null;
@@ -516,8 +483,8 @@ function startCountdown(){ if(cdTimer) return; refreshEventLabel(); tickCountdow
 function renderHero(){
   const s=stats();
   countUp(document.getElementById('k-open'), s.open);
-  const crit=document.getElementById('k-crit'); countUp(crit, s.crit); crit.closest('.tile').classList.toggle('glow-crit', s.crit>0);
-  const late=document.getElementById('k-late'); countUp(late, s.late); late.className='tile-num font-display tnum '+(s.late>0?'text-rosso':'text-mute');
+  const crit=document.getElementById('k-crit'); countUp(crit, s.crit); if(crit) crit.closest('.tile').classList.toggle('glow-crit', s.crit>0);
+  const late=document.getElementById('k-late'); countUp(late, s.late); if(late) late.className='tile-num font-display tnum '+(s.late>0?'text-rosso':'text-mute');
   countUp(document.getElementById('k-ready'), s.ready);
   renderGauge(s.avg, !gaugeAnimated); gaugeAnimated=true;
 }
@@ -537,7 +504,54 @@ function getFiltered(){
   data.forEach(s=> s.tasks=[...s.tasks].sort(cmp));
   return data;
 }
-function setFilter(k,v){ filters[k]=v; if(currentView!=='board') renderView(); }
+function setFilter(k,v){ filters[k]=v; if(currentView!=='board' && currentView!=='pitwall') renderView(); }
+
+/* ============================ VUE : PIT WALL ============================ */
+function renderPitWall(){
+  const s=stats();
+  let alerts=[]; projectData.forEach(sec=> sec.tasks.forEach(t=>{ const late=isLate(t),crit=(t.priority==='Critique'&&!isDone(t)); if(late||crit) alerts.push({t,late,crit}); }));
+  alerts.sort((a,b)=>(b.late+b.crit)-(a.late+a.crit)||pWeight(b.t.priority)-pWeight(a.t.priority));
+  
+  const alertItems=alerts.length?alerts.map(a=>`
+    <div class="flex items-center justify-between gap-3 py-2.5 border-b border-line last:border-0 ${isAdmin?'cursor-pointer hover:bg-panel2/50 px-2 -mx-2 rounded-lg':''}" ${isAdmin?`onclick="editTask(${a.t.id})"`:''}>
+      <div class="min-w-0"><div class="text-sm text-ink truncate">${esc(a.t.name)}</div><div class="text-xs text-mute truncate">${esc(assigneeLabel(a.t))} · échéance ${fmtDM(a.t.end)}</div></div>
+      <div class="flex items-center gap-1.5 shrink-0">${a.crit?'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Bloquant</span>':''}${a.late?'<span class="badge bg-amber/15 text-amber border-amber/40">En retard</span>':''}</div>
+    </div>`).join('') : `<div class="text-sm text-mute py-6 text-center flex items-center justify-center gap-2"><span class="text-go">${icon('check-circle')}</span> Aucun point bloquant. La voiture avance selon le plan.</div>`;
+
+  document.getElementById('view').innerHTML=`
+    <section class="bg-panel hero-tex border border-line rounded-2xl p-5 md:p-6 mb-6">
+      <div class="grid grid-cols-1 lg:grid-cols-[240px,1fr] gap-6 items-center">
+        <div class="flex flex-col items-center">
+          <div id="gauge" class="w-full max-w-[240px]" role="img" aria-label="Niveau de préparation de la voiture"></div>
+        </div>
+        <div class="min-w-0">
+          <div class="text-xs text-mute mb-1">Départ&nbsp;· <span id="cd-event" class="text-ink font-semibold">—</span></div>
+          <div id="countdown" class="flex items-center gap-2 mb-5">
+            <div class="cd-seg"><span id="cd-d" class="cd-n font-display tnum text-ink">--</span><span class="cd-u">jours</span></div>
+            <span class="cd-colon">:</span>
+            <div class="cd-seg"><span id="cd-h" class="cd-n font-display tnum text-ink">--</span><span class="cd-u">heures</span></div>
+            <span class="cd-colon">:</span>
+            <div class="cd-seg"><span id="cd-m" class="cd-n font-display tnum text-ink">--</span><span class="cd-u">min</span></div>
+            <span class="cd-colon">:</span>
+            <div class="cd-seg"><span id="cd-s" class="cd-n font-display tnum text-amber">--</span><span class="cd-u">sec</span></div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="tile"><div id="k-open"  class="tile-num font-display tnum text-ink">0</div><div class="tile-label">Tâches ouvertes</div></div>
+            <div class="tile"><div id="k-crit"  class="tile-num font-display tnum text-rosso">0</div><div class="tile-label">Points bloquants</div></div>
+            <div class="tile"><div id="k-late"  class="tile-num font-display tnum text-mute">0</div><div class="tile-label">En retard</div></div>
+            <div class="tile"><div id="k-ready" class="tile-num font-display tnum text-go">0</div><div class="tile-label">Validées</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="bg-panel border border-line rounded-2xl p-5">
+      <div class="flex items-center gap-2 mb-2"><h3 class="font-display font-bold text-white text-sm">Alertes pit-wall</h3><span class="badge ${alerts.length?'bg-rosso/15 text-rosso border-rosso/40':'bg-go/15 text-go border-go/40'}">${alerts.length}</span></div>
+      <p class="text-xs text-mute mb-3">Interventions critiques non terminées ou en retard sur l’échéance.</p>
+      ${alertItems}
+    </div>`;
+  renderHero();
+  tickCountdown();
+}
 
 /* ============================ VUE : TABLEAU DE BORD ============================ */
 function renderBoard(){
@@ -552,21 +566,12 @@ function renderBoard(){
   const rings=segs.map(x=>{ const len=(x.value/total)*circ; const c=`<circle cx="80" cy="80" r="${r}" fill="none" stroke="${x.color}" stroke-width="16" stroke-dasharray="${len.toFixed(2)} ${(circ-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 80 80)"/>`; off+=len; return c; }).join('');
   const legend=segs.map(x=>`<div class="flex items-center justify-between text-xs py-1"><span class="flex items-center gap-2"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${x.color}"></i>${x.label}</span><b class="font-display tnum text-ink">${x.value}</b></div>`).join('');
 
-  let alerts=[]; projectData.forEach(sec=> sec.tasks.forEach(t=>{ const late=isLate(t),crit=(t.priority==='Critique'&&!isDone(t)); if(late||crit) alerts.push({t,late,crit}); }));
-  alerts.sort((a,b)=>(b.late+b.crit)-(a.late+a.crit)||pWeight(b.t.priority)-pWeight(a.t.priority));
-  const alertItems=alerts.length?alerts.map(a=>`
-    <div class="flex items-center justify-between gap-3 py-2.5 border-b border-line last:border-0 ${isAdmin?'cursor-pointer hover:bg-panel2/50 px-2 -mx-2 rounded-lg':''}" ${isAdmin?`onclick="editTask(${a.t.id})"`:''}>
-      <div class="min-w-0"><div class="text-sm text-ink truncate">${esc(a.t.name)}</div><div class="text-xs text-mute truncate">${esc(assigneeLabel(a.t))} · échéance ${fmtDM(a.t.end)}</div></div>
-      <div class="flex items-center gap-1.5 shrink-0">${a.crit?'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Bloquant</span>':''}${a.late?'<span class="badge bg-amber/15 text-amber border-amber/40">En retard</span>':''}</div>
-    </div>`).join('') : `<div class="text-sm text-mute py-6 text-center flex items-center justify-center gap-2"><span class="text-go">${icon('check-circle')}</span> Aucun point bloquant. La voiture avance selon le plan.</div>`;
-
   document.getElementById('view').innerHTML=`
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
       <div class="lg:col-span-2 bg-panel border border-line rounded-2xl p-5"><h3 class="font-display font-bold text-white text-sm mb-4">Avancement par département</h3><div class="space-y-3.5">${deptBars}</div></div>
       <div class="bg-panel border border-line rounded-2xl p-5"><h3 class="font-display font-bold text-white text-sm mb-3">Répartition des statuts</h3>
         <div class="flex items-center gap-4"><div class="relative shrink-0"><svg viewBox="0 0 160 160" width="128" height="128"><circle cx="80" cy="80" r="${r}" fill="none" stroke="#232C38" stroke-width="16"/>${rings}</svg>
         <div class="absolute inset-0 flex flex-col items-center justify-center"><span class="font-display font-extrabold tnum text-2xl text-ink">${s.total}</span><span class="text-[10px] text-mute">tâches</span></div></div><div class="flex-1">${legend}</div></div></div>
-      <div class="lg:col-span-3 bg-panel border border-line rounded-2xl p-5"><div class="flex items-center gap-2 mb-2"><h3 class="font-display font-bold text-white text-sm">Alertes pit-wall</h3><span class="badge ${alerts.length?'bg-rosso/15 text-rosso border-rosso/40':'bg-go/15 text-go border-go/40'}">${alerts.length}</span></div><p class="text-xs text-mute mb-3">Interventions critiques non terminées ou en retard sur l’échéance.</p>${alertItems}</div>
     </div>
     <div class="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-mute px-1"><span class="font-semibold text-ink">Légende&nbsp;:</span>
       <span class="flex items-center gap-1.5"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${C.rosso}"></i>Critique</span>
@@ -673,12 +678,22 @@ function emptyState(msg){ return `<div class="bg-panel border border-line rounde
 /* ============================ ROUTAGE ============================ */
 function renderView(){
   if(me && !isAdmin && !me.department_id){ document.getElementById('view').innerHTML=emptyState("Aucun département ne t'a été attribué. Un ingénieur doit te rattacher à un département pour que les tâches s'affichent."); return; }
-  if(currentView==='board') renderBoard(); else if(currentView==='table') renderTable(); else renderGantt(); }
-function switchView(v){ currentView=v; ['board','table','gantt'].forEach(k=>document.getElementById('tab-'+k).setAttribute('aria-selected',k===v)); document.getElementById('controls').classList.toggle('hidden',v==='board'); renderView(); const vw=document.getElementById('view'); vw.classList.remove('fade-up'); void vw.offsetWidth; vw.classList.add('fade-up'); }
+  if(currentView==='pitwall') renderPitWall();
+  else if(currentView==='board') renderBoard();
+  else if(currentView==='table') renderTable();
+  else renderGantt();
+}
+function switchView(v){
+  currentView=v;
+  ['pitwall','board','table','gantt'].forEach(k=>document.getElementById('tab-'+k).setAttribute('aria-selected',k===v));
+  document.getElementById('controls').classList.toggle('hidden', v==='board' || v==='pitwall');
+  renderView();
+  const vw=document.getElementById('view'); vw.classList.remove('fade-up'); void vw.offsetWidth; vw.classList.add('fade-up');
+}
 function renderAll(){
   document.getElementById('admin-panel').classList.toggle('hidden', !isAdmin);
   if(isAdmin){ const rn=document.getElementById('race-name'),rd=document.getElementById('race-date'); if(document.activeElement!==rn) rn.value=race.name||''; if(document.activeElement!==rd) rd.value=race.date||''; }
-  renderHero(); renderView(); populateDeptControls(); populateAssigneeOptions(); renderDeptManager(); renderUsers();
+  renderView(); populateDeptControls(); populateAssigneeOptions(); renderDeptManager(); renderUsers();
 }
 function populateDeptControls(){
   const names=projectData.map(s=>s.rubrique);
@@ -697,7 +712,7 @@ function populateAssigneeOptions(){
 /* ============================ DÉPARTEMENTS (CRUD) ============================ */
 function renderDeptManager(){
   const el=document.getElementById('dept-manager'); if(!el) return;
-  if(el.contains(document.activeElement)) return; // ne pas écraser une saisie en cours
+  if(el.contains(document.activeElement)) return;
   if(!projectData.length){ el.innerHTML='<p class="text-xs text-mute">Aucun département — ajoutes-en un ci-dessous.</p>'; return; }
   const last=projectData.length-1;
   el.innerHTML=projectData.map((sec,i)=>`
@@ -887,7 +902,7 @@ async function editLink(id){
   if(!task) return;
   if(me.role==='contributeur' && !task.link_open){ alert("Cette tâche n'est pas ouverte à la contribution."); return; }
   const url=prompt("Lien de suivi (Git, Jira, télémétrie) :", task.link||'');
-  if(url===null) return;                 // annulé
+  if(url===null) return;
   const link=url.trim()||null;
   const { error }=await sb.from('tasks').update({ link }).eq('id',id);
   if(error){ alert('Erreur : '+error.message); } else { await loadData(); renderAll(); }
@@ -922,7 +937,7 @@ async function saveRace(){
   const name=document.getElementById('race-name').value.trim(), date=document.getElementById('race-date').value;
   const value={ name:name||race.name, date:date||race.date };
   const { error }=await sb.from('settings').upsert({ key:'race', value });
-  if(error){ alert('Erreur : '+error.message); } else { race=value; refreshEventLabel(); tickCountdown(); if(currentView==='gantt') renderGantt(); }
+  if(error){ alert('Erreur : '+error.message); } else { race=value; refreshEventLabel(); tickCountdown(); if(currentView==='pitwall') renderPitWall(); }
 }
 
 /* ============================ EXPORTS ============================ */
