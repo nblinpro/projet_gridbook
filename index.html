@@ -949,7 +949,7 @@ function renderUserArea(){
   const el=document.getElementById('user-area'); if(!me){ el.innerHTML=''; return; }
   const badges={ ingenieur:'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Ingénieur</span>', contributeur:'<span class="badge bg-amber/15 text-amber border-amber/40">Contributeur</span>', lecture:'<span class="badge bg-info/15 text-info border-info/40">Lecture seule</span>' };
   const roleBadge = badges[me.role] || badges.lecture;
-  el.innerHTML=`<span class="hidden sm:inline text-xs text-mute">${esc(me.email||'')}</span>${roleBadge}<button class="btn btn-ghost" onclick="logout()">Déconnexion</button>`;
+  el.innerHTML=`<span class="hidden sm:inline text-xs text-mute">${esc(me.full_name||me.email||'')}</span>${roleBadge}<button class="btn btn-ghost" onclick="logout()">Déconnexion</button>`;
 }
 async function doLogin(e){
   e.preventDefault();
