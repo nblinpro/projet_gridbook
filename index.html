@@ -203,6 +203,7 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
         <button role="tab" id="tab-board"   aria-selected="false" class="tab" onclick="switchView('board')"><i data-ic="layout-dashboard"></i> Tableau de bord</button>
         <button role="tab" id="tab-table"   aria-selected="false" class="tab" onclick="switchView('table')"><i data-ic="list-checks"></i> Interventions</button>
         <button role="tab" id="tab-gantt"   aria-selected="false" class="tab" onclick="switchView('gantt')"><i data-ic="gantt"></i> Gantt</button>
+        <button role="tab" id="tab-admin"   aria-selected="false" class="tab hidden" onclick="switchView('admin')"><i data-ic="settings"></i> Panneau ingénieur — ajouter une tâche</button>
       </div>
       <div id="controls" class="hidden flex-wrap items-center gap-2">
         <input id="search" class="in max-w-[220px]" placeholder="Rechercher (tâche, responsable)…" oninput="setFilter('q', this.value)">
@@ -225,118 +226,6 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
 
     <!-- VUES PRINCIPALES -->
     <div id="view" class="mb-8"></div>
-
-    <!-- PANNEAU INGÉNIEUR (PLACÉ EN BAS) -->
-    <section id="admin-panel" class="hidden mb-6 bg-panel border border-line rounded-2xl overflow-hidden">
-      <div class="bg-panel2 border-b border-line px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
-        <h2 id="form-title" class="font-display font-bold text-white text-sm flex items-center gap-2"><i data-ic="settings"></i> Panneau ingénieur — ajouter une tâche</h2>
-        <div class="flex items-center gap-2 flex-wrap">
-          <button class="btn" onclick="exportJSON()"><i data-ic="download"></i> Exporter JSON</button>
-          <button class="btn" onclick="exportCSV()"><i data-ic="file-text"></i> Exporter CSV</button>
-        </div>
-      </div>
-
-      <!-- Réglage de la course -->
-      <div class="px-5 py-4 border-b border-line grid grid-cols-1 sm:grid-cols-[1fr,auto,auto] gap-3 items-end">
-        <div>
-          <label class="block text-xs text-mute mb-1">Nom de la prochaine course</label>
-          <input id="race-name" class="in" placeholder="Ex : Grand Prix — Circuit Paul Ricard">
-        </div>
-        <div>
-          <label class="block text-xs text-mute mb-1">Date & heure du départ</label>
-          <input id="race-date" type="datetime-local" class="in">
-        </div>
-        <button class="btn btn-primary" onclick="saveRace()">Appliquer</button>
-      </div>
-
-      <!-- Départements -->
-      <div class="px-5 py-4 border-b border-line">
-        <h3 class="font-display font-bold text-white text-sm mb-3 flex items-center gap-2"><i data-ic="folder"></i> Départements</h3>
-        <div id="dept-manager" class="space-y-2"></div>
-        <div class="flex gap-2 mt-3">
-          <input id="new-dept" class="in flex-1" placeholder="Nouveau département — ex : Sécurité & extinction"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();addDept();}">
-          <button class="btn" onclick="addDept()">+ Ajouter</button>
-        </div>
-        <p class="text-[11px] text-mute mt-2">Renommer répercute le changement sur toutes les tâches. Les flèches modifient l’ordre d’affichage partout.</p>
-      </div>
-
-      <!-- Utilisateurs -->
-      <div class="px-5 py-4 border-b border-line">
-        <h3 class="font-display font-bold text-white text-sm mb-3 flex items-center gap-2"><i data-ic="users"></i> Utilisateurs</h3>
-        <div id="user-manager" class="space-y-2"></div>
-        <form id="user-form" onsubmit="addUser(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 mt-3 items-end">
-          <div class="lg:col-span-2"><label class="block text-xs text-mute mb-1">E-mail</label><input id="u-email" type="email" class="in" autocomplete="off" required></div>
-          <div><label class="block text-xs text-mute mb-1">Nom</label><input id="u-name" class="in" autocomplete="off"></div>
-          <div><label class="block text-xs text-mute mb-1">Mot de passe</label><div class="flex gap-1"><input id="u-pass" type="password" class="in" minlength="6" autocomplete="new-password" required><button type="button" class="btn !px-2" onclick="genPassword()" title="Générer un mot de passe"><i data-ic="dice"></i></button></div></div>
-          <div><label class="block text-xs text-mute mb-1">Rôle</label><select id="u-role" class="in"><option value="lecture">Lecture</option><option value="contributeur">Contributeur</option><option value="ingenieur">Ingénieur</option></select></div>
-          <button id="u-submit" type="submit" class="btn btn-primary">+ Créer</button>
-        </form>
-        <p class="text-[11px] text-mute mt-2">La création passe par la fonction Edge <code class="text-info">manage-users</code>. Le compte est actif immédiatement, sans e-mail de confirmation.</p>
-      </div>
-
-      <!-- Formulaire tâche -->
-      <form id="task-form" onsubmit="handleFormSubmit(event)" class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <input type="hidden" id="edit-id">
-        <div>
-          <label class="block text-xs text-mute mb-1">Département / rubrique</label>
-          <input id="f-rub" class="in" list="rub-list" placeholder="Ex : Moteur & Powertrain" required>
-          <datalist id="rub-list"></datalist>
-        </div>
-        <div>
-          <label class="block text-xs text-mute mb-1">Intitulé de l’intervention</label>
-          <input id="f-name" class="in" placeholder="Ex : Révision turbo & cartographie" required>
-        </div>
-        <div>
-          <label class="block text-xs text-mute mb-1">Responsable</label>
-          <select id="f-assignee" class="in"><option value="">Non assigné</option></select>
-        </div>
-        <div>
-          <label class="block text-xs text-mute mb-1">Lien de suivi (Git, Jira, télémétrie)</label>
-          <input id="f-link" type="url" class="in" placeholder="https://github.com/nblinpro/…">
-        </div>
-        <div>
-          <label class="block text-xs text-mute mb-1">Planning (début → fin)</label>
-          <div class="flex gap-2">
-            <input id="f-start" type="date" class="in" required>
-            <input id="f-end" type="date" class="in" required>
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs text-mute mb-1">Criticité</label>
-          <select id="f-priority" class="in">
-            <option value="Normal">🔵 Normal</option>
-            <option value="Important">🟠 Important</option>
-            <option value="Critique">🔴 Critique / bloquant</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs text-mute mb-1">Avancement — <span id="range-val" class="text-go font-bold">50</span>%</label>
-          <input id="f-progress" type="range" min="0" max="100" value="50" class="w-full mt-3 accent-rosso cursor-pointer"
-                 oninput="document.getElementById('range-val').innerText=this.value">
-        </div>
-        <div>
-          <label class="block text-xs text-mute mb-1">Statut atelier</label>
-          <select id="f-status" class="in">
-            <option value="À planifier">À planifier</option>
-            <option value="En cours">En cours</option>
-            <option value="Prêt / Validé">Prêt / Validé</option>
-          </select>
-        </div>
-        <div class="md:col-span-3">
-          <label class="block text-xs text-mute mb-1">Description (optionnel)</label>
-          <textarea id="f-desc" rows="3" class="in" placeholder="Détails, contexte, procédure…"></textarea>
-        </div>
-        <div class="md:col-span-3 flex items-center gap-2">
-          <input type="checkbox" id="f-linkopen" class="accent-amber w-4 h-4">
-          <label for="f-linkopen" class="text-xs text-mute">Ouvrir le lien de suivi à la contribution (un contributeur pourra le renseigner)</label>
-        </div>
-        <div class="md:col-span-3 flex justify-end gap-3 pt-1">
-          <button type="button" id="cancel-btn" onclick="resetForm()" class="btn hidden">Annuler</button>
-          <button type="submit" id="submit-btn" class="btn btn-primary">+ Ajouter la tâche</button>
-        </div>
-      </form>
-    </section>
 
   </div>
 </main>
@@ -675,6 +564,127 @@ function renderGantt(){
       </div>
     </div>`;
 }
+
+/* ============================ VUE : PANNEAU INGÉNIEUR ============================ */
+function renderAdminPanel(){
+  document.getElementById('view').innerHTML=`
+    <div class="bg-panel border border-line rounded-2xl overflow-hidden">
+      <div class="bg-panel2 border-b border-line px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+        <h2 id="form-title" class="font-display font-bold text-white text-sm flex items-center gap-2"><i data-ic="settings"></i> Panneau ingénieur — ajouter une tâche</h2>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button class="btn" onclick="exportJSON()"><i data-ic="download"></i> Exporter JSON</button>
+          <button class="btn" onclick="exportCSV()"><i data-ic="file-text"></i> Exporter CSV</button>
+        </div>
+      </div>
+
+      <!-- Réglage de la course -->
+      <div class="px-5 py-4 border-b border-line grid grid-cols-1 sm:grid-cols-[1fr,auto,auto] gap-3 items-end">
+        <div>
+          <label class="block text-xs text-mute mb-1">Nom de la prochaine course</label>
+          <input id="race-name" class="in" placeholder="Ex : Grand Prix — Circuit Paul Ricard" value="${esc(race.name)}">
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Date & heure du départ</label>
+          <input id="race-date" type="datetime-local" class="in" value="${esc(race.date)}">
+        </div>
+        <button class="btn btn-primary" onclick="saveRace()">Appliquer</button>
+      </div>
+
+      <!-- Départements -->
+      <div class="px-5 py-4 border-b border-line">
+        <h3 class="font-display font-bold text-white text-sm mb-3 flex items-center gap-2"><i data-ic="folder"></i> Départements</h3>
+        <div id="dept-manager" class="space-y-2"></div>
+        <div class="flex gap-2 mt-3">
+          <input id="new-dept" class="in flex-1" placeholder="Nouveau département — ex : Sécurité & extinction"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addDept();}">
+          <button class="btn" onclick="addDept()">+ Ajouter</button>
+        </div>
+        <p class="text-[11px] text-mute mt-2">Renommer répercute le changement sur toutes les tâches. Les flèches modifient l’ordre d’affichage partout.</p>
+      </div>
+
+      <!-- Utilisateurs -->
+      <div class="px-5 py-4 border-b border-line">
+        <h3 class="font-display font-bold text-white text-sm mb-3 flex items-center gap-2"><i data-ic="users"></i> Utilisateurs</h3>
+        <div id="user-manager" class="space-y-2"></div>
+        <form id="user-form" onsubmit="addUser(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 mt-3 items-end">
+          <div class="lg:col-span-2"><label class="block text-xs text-mute mb-1">E-mail</label><input id="u-email" type="email" class="in" autocomplete="off" required></div>
+          <div><label class="block text-xs text-mute mb-1">Nom</label><input id="u-name" class="in" autocomplete="off"></div>
+          <div><label class="block text-xs text-mute mb-1">Mot de passe</label><div class="flex gap-1"><input id="u-pass" type="password" class="in" minlength="6" autocomplete="new-password" required><button type="button" class="btn !px-2" onclick="genPassword()" title="Générer un mot de passe"><i data-ic="dice"></i></button></div></div>
+          <div><label class="block text-xs text-mute mb-1">Rôle</label><select id="u-role" class="in"><option value="lecture">Lecture</option><option value="contributeur">Contributeur</option><option value="ingenieur">Ingénieur</option></select></div>
+          <button id="u-submit" type="submit" class="btn btn-primary">+ Créer</button>
+        </form>
+        <p class="text-[11px] text-mute mt-2">La création passe par la fonction Edge <code class="text-info">manage-users</code>. Le compte est actif immédiatement, sans e-mail de confirmation.</p>
+      </div>
+
+      <!-- Formulaire tâche -->
+      <form id="task-form" onsubmit="handleFormSubmit(event)" class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input type="hidden" id="edit-id">
+        <div>
+          <label class="block text-xs text-mute mb-1">Département / rubrique</label>
+          <input id="f-rub" class="in" list="rub-list" placeholder="Ex : Moteur & Powertrain" required>
+          <datalist id="rub-list"></datalist>
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Intitulé de l’intervention</label>
+          <input id="f-name" class="in" placeholder="Ex : Révision turbo & cartographie" required>
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Responsable</label>
+          <select id="f-assignee" class="in"><option value="">Non assigné</option></select>
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Lien de suivi (Git, Jira, télémétrie)</label>
+          <input id="f-link" type="url" class="in" placeholder="https://github.com/nblinpro/…">
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Planning (début → fin)</label>
+          <div class="flex gap-2">
+            <input id="f-start" type="date" class="in" required>
+            <input id="f-end" type="date" class="in" required>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Criticité</label>
+          <select id="f-priority" class="in">
+            <option value="Normal">🔵 Normal</option>
+            <option value="Important">🟠 Important</option>
+            <option value="Critique">🔴 Critique / bloquant</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Avancement — <span id="range-val" class="text-go font-bold">50</span>%</label>
+          <input id="f-progress" type="range" min="0" max="100" value="50" class="w-full mt-3 accent-rosso cursor-pointer"
+                 oninput="document.getElementById('range-val').innerText=this.value">
+        </div>
+        <div>
+          <label class="block text-xs text-mute mb-1">Statut atelier</label>
+          <select id="f-status" class="in">
+            <option value="À planifier">À planifier</option>
+            <option value="En cours">En cours</option>
+            <option value="Prêt / Validé">Prêt / Validé</option>
+          </select>
+        </div>
+        <div class="md:col-span-3">
+          <label class="block text-xs text-mute mb-1">Description (optionnel)</label>
+          <textarea id="f-desc" rows="3" class="in" placeholder="Détails, contexte, procédure…"></textarea>
+        </div>
+        <div class="md:col-span-3 flex items-center gap-2">
+          <input type="checkbox" id="f-linkopen" class="accent-amber w-4 h-4">
+          <label for="f-linkopen" class="text-xs text-mute">Ouvrir le lien de suivi à la contribution (un contributeur pourra le renseigner)</label>
+        </div>
+        <div class="md:col-span-3 flex justify-end gap-3 pt-1">
+          <button type="button" id="cancel-btn" onclick="resetForm()" class="btn hidden">Annuler</button>
+          <button type="submit" id="submit-btn" class="btn btn-primary">+ Ajouter la tâche</button>
+        </div>
+      </form>
+    </div>`;
+  hydrateIcons();
+  populateDeptControls();
+  populateAssigneeOptions();
+  renderDeptManager();
+  renderUsers();
+}
+
 function emptyState(msg){ return `<div class="bg-panel border border-line rounded-2xl py-16 text-center"><div class="mb-2 flex justify-center text-mute">${icon('flag','ic-lg')}</div><p class="text-sm text-mute">${esc(msg)}</p></div>`; }
 
 /* ============================ ROUTAGE ============================ */
@@ -683,26 +693,35 @@ function renderView(){
   if(currentView==='pitwall') renderPitWall();
   else if(currentView==='board') renderBoard();
   else if(currentView==='table') renderTable();
-  else renderGantt();
+  else if(currentView==='gantt') renderGantt();
+  else if(currentView==='admin') renderAdminPanel();
 }
 function switchView(v){
+  if(v==='admin' && !isAdmin) return;
   currentView=v;
-  ['pitwall','board','table','gantt'].forEach(k=>document.getElementById('tab-'+k).setAttribute('aria-selected',k===v));
-  document.getElementById('controls').classList.toggle('hidden', v==='board' || v==='pitwall');
+  ['pitwall','board','table','gantt','admin'].forEach(k=>{
+    const btn=document.getElementById('tab-'+k);
+    if(btn) btn.setAttribute('aria-selected',k===v);
+  });
+  document.getElementById('controls').classList.toggle('hidden', v==='board' || v==='pitwall' || v==='admin');
   renderView();
   const vw=document.getElementById('view'); vw.classList.remove('fade-up'); void vw.offsetWidth; vw.classList.add('fade-up');
 }
 function renderAll(){
-  document.getElementById('admin-panel').classList.toggle('hidden', !isAdmin);
-  if(isAdmin){ const rn=document.getElementById('race-name'),rd=document.getElementById('race-date'); if(document.activeElement!==rn) rn.value=race.name||''; if(document.activeElement!==rd) rd.value=race.date||''; }
+  const tabAdmin=document.getElementById('tab-admin');
+  if(tabAdmin) tabAdmin.classList.toggle('hidden', !isAdmin);
   renderView(); populateDeptControls(); populateAssigneeOptions(); renderDeptManager(); renderUsers();
 }
 function populateDeptControls(){
   const names=projectData.map(s=>s.rubrique);
   if(filters.dept!=='ALL' && !names.includes(filters.dept)) filters.dept='ALL';
-  document.getElementById('rub-list').innerHTML=names.map(n=>`<option value="${esc(n)}">`).join('');
-  const sel=document.getElementById('fltDept'),keep=filters.dept;
-  sel.innerHTML=`<option value="ALL">Tous départements</option>`+names.map(n=>`<option${n===keep?' selected':''}>${esc(n)}</option>`).join('');
+  const rubList=document.getElementById('rub-list');
+  if(rubList) rubList.innerHTML=names.map(n=>`<option value="${esc(n)}">`).join('');
+  const sel=document.getElementById('fltDept');
+  if(sel){
+    const keep=filters.dept;
+    sel.innerHTML=`<option value="ALL">Tous départements</option>`+names.map(n=>`<option${n===keep?' selected':''}>${esc(n)}</option>`).join('');
+  }
 }
 function populateAssigneeOptions(){
   const sel=document.getElementById('f-assignee'); if(!sel) return;
@@ -726,6 +745,7 @@ function renderDeptManager(){
       <button class="iconbtn" onclick="moveDept(${sec.id},1)" ${i===last?'disabled':''} title="Descendre" aria-label="Descendre">${icon('chevron-down')}</button>
       <button class="iconbtn danger" onclick="deleteDept(${sec.id})" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
     </div>`).join('');
+  hydrateIcons();
 }
 const deptExists=(name,exceptId)=> projectData.some(s=> s.id!==exceptId && s.rubrique.trim().toLowerCase()===name.trim().toLowerCase());
 async function ensureDepartment(name){
@@ -793,6 +813,7 @@ function renderUsers(){
       <button class="iconbtn danger" ${self?'disabled':''} onclick="deleteUser('${u.id}','${esc(u.email||'')}')" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
     </div>`;
   }).join('');
+  hydrateIcons();
 }
 async function callManageUsers(payload){
   const { data, error }=await sb.functions.invoke('manage-users', { body:payload });
@@ -863,6 +884,7 @@ async function handleFormSubmit(e){
 }
 function editTask(id){
   if(!isAdmin) return;
+  switchView('admin');
   let task=null, deptName='';
   for(const d of projectData){ const t=d.tasks.find(x=>x.id===id); if(t){ task=t; deptName=d.rubrique; break; } }
   if(!task) return;
@@ -882,15 +904,16 @@ function editTask(id){
   document.getElementById('form-title').innerHTML=icon('pencil')+' Panneau ingénieur — modifier la tâche';
   document.getElementById('submit-btn').innerText='Enregistrer les modifications';
   document.getElementById('cancel-btn').classList.remove('hidden');
-  document.getElementById('admin-panel').scrollIntoView({behavior:REDUCE?'auto':'smooth'});
+  hydrateIcons();
 }
 function resetForm(){
-  document.getElementById('task-form').reset();
-  document.getElementById('edit-id').value='';
-  document.getElementById('range-val').innerText='50';
-  document.getElementById('form-title').innerHTML=icon('settings')+' Panneau ingénieur — ajouter une tâche';
-  document.getElementById('submit-btn').innerText='+ Ajouter la tâche';
-  document.getElementById('cancel-btn').classList.add('hidden');
+  const f=document.getElementById('task-form'); if(f) f.reset();
+  const editId=document.getElementById('edit-id'); if(editId) editId.value='';
+  const rv=document.getElementById('range-val'); if(rv) rv.innerText='50';
+  const ft=document.getElementById('form-title'); if(ft) ft.innerHTML=icon('settings')+' Panneau ingénieur — ajouter une tâche';
+  const sbBtn=document.getElementById('submit-btn'); if(sbBtn) sbBtn.innerText='+ Ajouter la tâche';
+  const cbBtn=document.getElementById('cancel-btn'); if(cbBtn) cbBtn.classList.add('hidden');
+  hydrateIcons();
 }
 async function deleteTask(id){
   if(!isAdmin) return;
@@ -936,10 +959,11 @@ async function deleteSubtask(id){
 
 /* ============================ COURSE ============================ */
 async function saveRace(){
-  const name=document.getElementById('race-name').value.trim(), date=document.getElementById('race-date').value;
+  const rn=document.getElementById('race-name'), rd=document.getElementById('race-date');
+  const name=rn?rn.value.trim():race.name, date=rd?rd.value:race.date;
   const value={ name:name||race.name, date:date||race.date };
   const { error }=await sb.from('settings').upsert({ key:'race', value });
-  if(error){ alert('Erreur : '+error.message); } else { race=value; refreshEventLabel(); tickCountdown(); if(currentView==='gantt') renderGantt(); }
+  if(error){ alert('Erreur : '+error.message); } else { race=value; refreshEventLabel(); tickCountdown(); alert('Paramètres de course enregistrés.'); }
 }
 
 /* ============================ EXPORTS ============================ */
