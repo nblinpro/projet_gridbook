@@ -109,6 +109,19 @@
   .spin{ width:32px; height:32px; border-radius:50%; border:3px solid #232C38; border-top-color:#E10600; animation:spin .8s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg);} }
 
+  /* ---- Listes admin (départements, utilisateurs) ---- */
+  .list-row{ display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:12px; transition:background .12s ease; }
+  .list-row:hover{ background:#1a212b; }
+  .in-inline{ background:transparent; border-color:transparent; }
+  .in-inline:hover{ border-color:#2A333F; background:#0d1117; }
+  .in-inline:focus{ border-color:#4C86E0; background:#0B0E13; }
+  .iconbtn{ display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:9px; color:#8B98A8; background:transparent; border:0; cursor:pointer; flex:none; transition:background .12s ease, color .12s ease; }
+  .iconbtn:not(:disabled):hover{ background:#232C38; color:#E6EDF3; }
+  .iconbtn.danger:not(:disabled):hover{ background:rgba(225,6,0,.12); color:#E10600; }
+  .iconbtn:disabled{ opacity:.35; cursor:not-allowed; }
+  .chip{ display:inline-flex; align-items:center; gap:5px; font-size:11px; color:#8B98A8; background:#0d1117; border:1px solid #2A333F; border-radius:999px; padding:3px 8px; flex:none; }
+  .avatar{ width:34px; height:34px; border-radius:9999px; display:flex; align-items:center; justify-content:center; font-family:'Oxanium',sans-serif; font-weight:700; font-size:13px; color:#E6EDF3; background:linear-gradient(180deg,#232C38,#1a212b); border:1px solid #2A333F; flex:none; }
+
   @media (max-width:640px){ :root{ --label-w:120px; } .cd-n{ font-size:30px; } }
   @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
 </style>
@@ -417,6 +430,8 @@ const ICONS={
 function icon(name, cls=''){ return `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]||''}</svg>`; }
 function hydrateIcons(){ document.querySelectorAll('i[data-ic]').forEach(el=>{ const t=document.createElement('template'); t.innerHTML=icon(el.getAttribute('data-ic'), el.className||''); if(t.content.firstChild) el.replaceWith(t.content.firstChild); }); }
 function countUp(el, to){ if(!el) return; if(REDUCE){ el.innerText=to; return; } const from=parseInt(el.innerText,10)||0; if(from===to){ el.innerText=to; return; } const dur=500,t0=performance.now(); (function s(now){ const k=Math.min(1,(now-t0)/dur); el.innerText=Math.round(from+(to-from)*k); if(k<1) requestAnimationFrame(s); })(performance.now()); }
+function initials(u){ const n=(u.full_name||u.email||'?').trim(); const p=n.split(/[\s@._-]+/).filter(Boolean); return (((p[0]||'?')[0]||'?')+((p[1]||'')[0]||'')).toUpperCase(); }
+function avatarColor(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0; return `hsl(${h%360} 45% 50%)`; }
 
 /* ============================ HELPERS ============================ */
 const esc = (s='')=> String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
@@ -683,13 +698,13 @@ function renderDeptManager(){
   if(!projectData.length){ el.innerHTML='<p class="text-xs text-mute">Aucun département — ajoutes-en un ci-dessous.</p>'; return; }
   const last=projectData.length-1;
   el.innerHTML=projectData.map((sec,i)=>`
-    <div class="flex items-center gap-2">
-      <input class="in flex-1" value="${esc(sec.rubrique)}" aria-label="Nom du département" onchange="renameDept(${sec.id}, this.value)" onkeydown="if(event.key==='Enter')this.blur()">
-      <span class="badge bg-surface text-mute border-line shrink-0" title="Tâches">${icon('list')} ${sec.tasks.length}</span>
-      <span class="badge bg-surface text-mute border-line shrink-0" title="Membres affiliés">${icon('user')} ${users.filter(u=>u.department_id===sec.id).length}</span>
-      <button class="btn !px-2.5 !py-2 disabled:opacity-40 disabled:pointer-events-none" onclick="moveDept(${sec.id},-1)" ${i===0?'disabled':''} title="Monter" aria-label="Monter">${icon('chevron-up')}</button>
-      <button class="btn !px-2.5 !py-2 disabled:opacity-40 disabled:pointer-events-none" onclick="moveDept(${sec.id},1)" ${i===last?'disabled':''} title="Descendre" aria-label="Descendre">${icon('chevron-down')}</button>
-      <button class="btn !px-2.5 !py-2 !text-rosso" onclick="deleteDept(${sec.id})" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
+    <div class="list-row">
+      <input class="in in-inline flex-1" value="${esc(sec.rubrique)}" aria-label="Nom du département" onchange="renameDept(${sec.id}, this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+      <span class="chip" title="Tâches">${icon('list')} ${sec.tasks.length}</span>
+      <span class="chip" title="Membres affiliés">${icon('user')} ${users.filter(u=>u.department_id===sec.id).length}</span>
+      <button class="iconbtn" onclick="moveDept(${sec.id},-1)" ${i===0?'disabled':''} title="Monter" aria-label="Monter">${icon('chevron-up')}</button>
+      <button class="iconbtn" onclick="moveDept(${sec.id},1)" ${i===last?'disabled':''} title="Descendre" aria-label="Descendre">${icon('chevron-down')}</button>
+      <button class="iconbtn danger" onclick="deleteDept(${sec.id})" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
     </div>`).join('');
 }
 const deptExists=(name,exceptId)=> projectData.some(s=> s.id!==exceptId && s.rubrique.trim().toLowerCase()===name.trim().toLowerCase());
@@ -742,8 +757,10 @@ function renderUsers(){
   if(!users.length){ el.innerHTML='<p class="text-xs text-mute">Aucun utilisateur chargé.</p>'; return; }
   el.innerHTML=users.map(u=>{
     const self = me && u.id===me.id;
-    return `<div class="flex flex-wrap items-center gap-2">
-      <div class="flex-1 min-w-[180px]"><div class="text-sm text-ink truncate">${esc(u.full_name||u.email||'—')} ${self?'<span class="text-mute">(vous)</span>':''}</div><div class="text-xs text-mute truncate">${esc(u.email||'')}</div></div>
+    const nm=u.full_name||u.email||'—';
+    return `<div class="list-row flex-wrap">
+      <div class="avatar" style="border-color:${avatarColor(nm)}">${esc(initials(u))}</div>
+      <div class="flex-1 min-w-[160px]"><div class="text-sm text-ink truncate">${esc(nm)} ${self?'<span class="text-mute">(vous)</span>':''}</div><div class="text-xs text-mute truncate">${esc(u.email||'')}</div></div>
       <select class="in w-auto" onchange="setUserDepartment('${u.id}', this.value)" title="Département">
         <option value="">Aucun département</option>
         ${projectData.map(d=>`<option value="${d.id}"${u.department_id===d.id?' selected':''}>${esc(d.rubrique)}</option>`).join('')}
@@ -753,7 +770,7 @@ function renderUsers(){
         <option value="contributeur"${u.role==='contributeur'?' selected':''}>Contributeur</option>
         <option value="ingenieur"${u.role==='ingenieur'?' selected':''}>Ingénieur</option>
       </select>
-      <button class="btn !px-2.5 !py-2 !text-rosso disabled:opacity-40 disabled:pointer-events-none" ${self?'disabled':''} onclick="deleteUser('${u.id}','${esc(u.email||'')}')" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
+      <button class="iconbtn danger" ${self?'disabled':''} onclick="deleteUser('${u.id}','${esc(u.email||'')}')" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
     </div>`;
   }).join('');
 }
