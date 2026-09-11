@@ -255,20 +255,7 @@ const C = { rosso:'#E10600', amber:'#F5A623', go:'#2ED47A', info:'#4C86E0', mute
 function canEditLink(){ return !!(me && (me.role==='ingenieur' || me.role==='contributeur')); }
 function deptName(id){ const d=projectData.find(x=>x.id===id); return d?d.rubrique:''; }
 function userLabel(u){ const dn=deptName(u.department_id); return (u.full_name||u.email||'—')+(dn?` — ${dn}`:''); }
-
-function assigneesLabel(t){
-  if(t.assignee_ids && t.assignee_ids.length > 0){
-    return t.assignee_ids.map(id => {
-      const u = users.find(x => x.id === id);
-      return u ? (u.full_name || u.email) : null;
-    }).filter(Boolean).join(', ') || 'Non assigné';
-  }
-  if(t.assignee_id){
-    const u = users.find(x => x.id === t.assignee_id);
-    return u ? (u.full_name || u.email) : 'Assigné';
-  }
-  return t.assignee || 'Non assigné';
-}
+function assigneeLabel(t){ if(t.assignee_id){ const u=users.find(x=>x.id===t.assignee_id); return u?(u.full_name||u.email):'Assigné'; } return t.assignee||'Non assigné'; }
 
 /* ---- Icônes (SVG intégrés, style Lucide) ---- */
 const ICONS={
@@ -314,7 +301,7 @@ const fmtDM  = s => { const d=pDate(s); return d ? String(d.getDate()).padStart(
 const pWeight = p => ({Critique:3,Important:2,Normal:1}[p]||0);
 const prioColor = p => p==='Critique'?C.rosso : p==='Important'?C.amber : C.info;
 const debounce = (fn,ms)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
-const mapTask = t => ({ id:t.id, department_id:t.department_id, name:t.name, assignee:t.assignee, assignee_id:t.assignee_id||null, assignee_ids:t.assignee_ids||[],
+const mapTask = t => ({ id:t.id, department_id:t.department_id, name:t.name, assignee:t.assignee, assignee_id:t.assignee_id||null,
   priority:t.priority||'Normal', start:t.start_date, end:t.end_date, progress:t.progress??0, link:t.link, link_open:!!t.link_open, description:t.description||'', status:t.status||'À planifier' });
 
 function statusBadge(s){ const m={ 'Prêt / Validé':['bg-go/15','text-go','border-go/40'],'En cours':['bg-amber/15','text-amber','border-amber/40'],'À planifier':['bg-panel2','text-mute','border-line'] }[s]||['bg-panel2','text-mute','border-line']; return `<span class="badge ${m[0]} ${m[1]} ${m[2]}">${esc(s)}</span>`; }
@@ -322,28 +309,16 @@ function prioBadge(p){ const m={ 'Critique':['bg-rosso/15','text-rosso','border-
 
 /* ============================ ACCÈS DONNÉES (Supabase) ============================ */
 async function loadData(){
-  const [d, t, ta, st, r] = await Promise.all([
+  const [d, t, st, r] = await Promise.all([
     sb.from('departments').select('*').order('position'),
     sb.from('tasks').select('*').order('id'),
-    sb.from('task_assignees').select('*').catch(()=>({data:[]})),
     sb.from('subtasks').select('*').order('position'),
     sb.from('settings').select('value').eq('key','race').maybeSingle()
   ]);
   if(d.error) console.error(d.error); if(t.error) console.error(t.error); if(st.error) console.error(st.error);
-  
-  const assigneesMap = {};
-  (ta.data || []).forEach(row => {
-    (assigneesMap[row.task_id] ||= []).push(row.profile_id);
-  });
-
   const subByTask={}; (st.data||[]).forEach(s=>{ (subByTask[s.task_id] ||= []).push(s); });
   const byDept = {};
-  (t.data||[]).forEach(x=>{
-    const mt=mapTask(x);
-    mt.assignee_ids = assigneesMap[x.id] || (x.assignee_id ? [x.assignee_id] : []);
-    mt.subtasks=subByTask[x.id]||[];
-    (byDept[x.department_id] ||= []).push(mt);
-  });
+  (t.data||[]).forEach(x=>{ const mt=mapTask(x); mt.subtasks=subByTask[x.id]||[]; (byDept[x.department_id] ||= []).push(mt); });
   projectData = (d.data||[]).map(dep=>({ id:dep.id, rubrique:dep.name, position:dep.position, tasks:(byDept[dep.id]||[]) }));
   if(me && !isAdmin) projectData = projectData.filter(s=> s.id === me.department_id);
   if(r && r.data && r.data.value) race = r.data.value;
@@ -430,7 +405,7 @@ function renderPitWall(){
   
   const alertItems=alerts.length?alerts.map(a=>`
     <div class="flex items-center justify-between gap-3 py-2.5 border-b border-line last:border-0 ${isAdmin?'cursor-pointer hover:bg-panel2/50 px-2 -mx-2 rounded-lg':''}" ${isAdmin?`onclick="editTask(${a.t.id})"`:''}>
-      <div class="min-w-0"><div class="text-sm text-ink truncate">${esc(a.t.name)}</div><div class="text-xs text-mute truncate">${esc(assigneesLabel(a.t))} · échéance ${fmtDM(a.t.end)}</div></div>
+      <div class="min-w-0"><div class="text-sm text-ink truncate">${esc(a.t.name)}</div><div class="text-xs text-mute truncate">${esc(assigneeLabel(a.t))} · échéance ${fmtDM(a.t.end)}</div></div>
       <div class="flex items-center gap-1.5 shrink-0">${a.crit?'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Bloquant</span>':''}${a.late?'<span class="badge bg-amber/15 text-amber border-amber/40">En retard</span>':''}</div>
     </div>`).join('') : `<div class="text-sm text-mute py-6 text-center flex items-center justify-center gap-2"><span class="text-go">${icon('check-circle')}</span> Aucun point bloquant. La voiture avance selon le plan.</div>`;
 
@@ -505,7 +480,7 @@ function renderTable(){
       <div class="bg-panel2 border-b border-line px-5 py-3.5 flex justify-between items-center"><h2 class="font-display font-bold text-sm text-ink flex items-center gap-2">${icon('wrench')} ${esc(sec.rubrique)}</h2><span class="badge bg-surface text-mute border-line">${sec.tasks.length} tâche(s)</span></div>
       <div class="overflow-x-auto"><table class="w-full text-left text-xs min-w-[820px]">
         <thead class="text-mute border-b border-line"><tr>
-          <th class="py-3 px-5 font-semibold">Intervention</th><th class="py-3 px-5 font-semibold">Responsable(s)</th><th class="py-3 px-5 font-semibold">Criticité</th><th class="py-3 px-5 font-semibold">Planning</th><th class="py-3 px-5 font-semibold">Statut</th><th class="py-3 px-5 font-semibold w-40">Avancement</th><th class="py-3 px-5 font-semibold text-right">Actions</th>
+          <th class="py-3 px-5 font-semibold">Intervention</th><th class="py-3 px-5 font-semibold">Responsable</th><th class="py-3 px-5 font-semibold">Criticité</th><th class="py-3 px-5 font-semibold">Planning</th><th class="py-3 px-5 font-semibold">Statut</th><th class="py-3 px-5 font-semibold w-40">Avancement</th><th class="py-3 px-5 font-semibold text-right">Actions</th>
         </tr></thead>
         <tbody class="divide-y divide-line">${sec.tasks.map(t=>{
           const subs=t.subtasks||[]; const total=subs.length, done=subs.filter(s=>s.done).length; const open=expanded.has(t.id);
@@ -515,7 +490,7 @@ function renderTable(){
               <button onclick="toggleExpand(${t.id})" class="text-mute hover:text-ink mr-1" title="Détails" aria-label="Afficher les détails">${open?icon('chevron-down'):icon('chevron-right')}</button>
               ${esc(t.name)} ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1">retard</span>':''}${t.link_open?`<span class="badge bg-amber/15 text-amber border-amber/40 ml-1">${icon('lock-open')} contrib.</span>`:''}${total?`<span class="badge bg-panel2 text-mute border-line ml-1">${icon('check-square')} ${done}/${total}</span>`:''}
             </td>
-            <td class="py-3.5 px-5 text-mute">${esc(assigneesLabel(t))}</td>
+            <td class="py-3.5 px-5 text-mute">${esc(assigneeLabel(t))}</td>
             <td class="py-3.5 px-5">${prioBadge(t.priority)}</td>
             <td class="py-3.5 px-5 text-mute font-display tnum whitespace-nowrap">${fmtDM(t.start)} → ${fmtDM(t.end)}</td>
             <td class="py-3.5 px-5">${statusBadge(t.status)}</td>
@@ -575,8 +550,8 @@ function renderGantt(){
   const rows=data.map(sec=>`
     <div class="mb-4"><div class="text-xs font-display font-bold text-ink bg-panel2 rounded-lg px-3 py-2 mb-2 inline-flex items-center gap-2">${icon('flag')} ${esc(sec.rubrique)}</div>
     ${sec.tasks.map(t=>{ const l=pct(pDate(t.start)),w=Math.max(1.5,pct(pDate(t.end))-l),col=prioColor(t.priority);
-      return `<div class="g-row" title="${esc(t.name)} — ${esc(assigneesLabel(t))}&#10;${fmtDM(t.start)} → ${fmtDM(t.end)} · ${t.progress}% · ${esc(t.status)}">
-        <div class="g-label truncate">${esc(t.name)}<br><small>${esc(assigneesLabel(t))}</small></div>
+      return `<div class="g-row" title="${esc(t.name)} — ${esc(assigneeLabel(t))}&#10;${fmtDM(t.start)} → ${fmtDM(t.end)} · ${t.progress}% · ${esc(t.status)}">
+        <div class="g-label truncate">${esc(t.name)}<br><small>${esc(assigneeLabel(t))}</small></div>
         <div class="g-track"><div class="g-bar" style="left:${l.toFixed(2)}%; width:${w.toFixed(2)}%; background:${col}22; border:1px solid ${col}"><div class="fill" style="width:${t.progress}%; background:${col}"></div><span class="lab" style="color:${t.progress>55?'#0B0E13':'#E6EDF3'}">${t.progress}%</span></div></div>
       </div>`; }).join('')}</div>`).join('');
   document.getElementById('view').innerHTML=`
@@ -595,7 +570,7 @@ function renderAdminPanel(){
   document.getElementById('view').innerHTML=`
     <div class="bg-panel border border-line rounded-2xl overflow-hidden">
       <div class="bg-panel2 border-b border-line px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
-        <h2 id="form-title" class="font-display font-bold text-white text-sm flex items-center gap-2"><i data-ic="settings"></i> Panneau ingénieur — ajouter une tâche ou réunion</h2>
+        <h2 id="form-title" class="font-display font-bold text-white text-sm flex items-center gap-2"><i data-ic="settings"></i> Panneau ingénieur — ajouter une tâche</h2>
         <div class="flex items-center gap-2 flex-wrap">
           <button class="btn" onclick="exportJSON()"><i data-ic="download"></i> Exporter JSON</button>
           <button class="btn" onclick="exportCSV()"><i data-ic="file-text"></i> Exporter CSV</button>
@@ -620,7 +595,7 @@ function renderAdminPanel(){
         <h3 class="font-display font-bold text-white text-sm mb-3 flex items-center gap-2"><i data-ic="folder"></i> Départements</h3>
         <div id="dept-manager" class="space-y-2"></div>
         <div class="flex gap-2 mt-3">
-          <input id="new-dept" class="in flex-1" placeholder="Nouveau département ou rubrique — ex : Réunions & Management"
+          <input id="new-dept" class="in flex-1" placeholder="Nouveau département — ex : Sécurité & extinction"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();addDept();}">
           <button class="btn" onclick="addDept()">+ Ajouter</button>
         </div>
@@ -641,26 +616,25 @@ function renderAdminPanel(){
         <p class="text-[11px] text-mute mt-2">La création passe par la fonction Edge <code class="text-info">manage-users</code>. Le compte est actif immédiatement, sans e-mail de confirmation.</p>
       </div>
 
-      <!-- Formulaire tâche / réunion -->
+      <!-- Formulaire tâche -->
       <form id="task-form" onsubmit="handleFormSubmit(event)" class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
         <input type="hidden" id="edit-id">
         <div>
           <label class="block text-xs text-mute mb-1">Département / rubrique</label>
-          <input id="f-rub" class="in" list="rub-list" placeholder="Ex : Réunions ou Moteur" required>
+          <input id="f-rub" class="in" list="rub-list" placeholder="Ex : Moteur & Powertrain" required>
           <datalist id="rub-list"></datalist>
         </div>
         <div>
-          <label class="block text-xs text-mute mb-1">Intitulé de l’intervention / réunion</label>
-          <input id="f-name" class="in" placeholder="Ex : Réunion de brief stratégie course" required>
+          <label class="block text-xs text-mute mb-1">Intitulé de l’intervention</label>
+          <input id="f-name" class="in" placeholder="Ex : Révision turbo & cartographie" required>
         </div>
         <div>
-          <label class="block text-xs text-mute mb-1">Responsables (plusieurs choix possibles)</label>
-          <select id="f-assignees" class="in" multiple style="height: 82px;" title="Maintenez Ctrl (ou Cmd sur Mac) pour sélectionner plusieurs personnes"></select>
-          <small class="text-[10px] text-mute">Maintenez Ctrl ou Cmd pour en sélectionner plusieurs</small>
+          <label class="block text-xs text-mute mb-1">Responsable</label>
+          <select id="f-assignee" class="in"><option value="">Non assigné</option></select>
         </div>
         <div>
-          <label class="block text-xs text-mute mb-1">Lien de suivi (Git, Jira, visio, etc.)</label>
-          <input id="f-link" type="url" class="in" placeholder="https://meet.google.com/…">
+          <label class="block text-xs text-mute mb-1">Lien de suivi (Git, Jira, télémétrie)</label>
+          <input id="f-link" type="url" class="in" placeholder="https://github.com/nblinpro/…">
         </div>
         <div>
           <label class="block text-xs text-mute mb-1">Planning (début → fin)</label>
@@ -692,7 +666,7 @@ function renderAdminPanel(){
         </div>
         <div class="md:col-span-3">
           <label class="block text-xs text-mute mb-1">Description (optionnel)</label>
-          <textarea id="f-desc" rows="3" class="in" placeholder="Ordre du jour, détails, compte-rendu…"></textarea>
+          <textarea id="f-desc" rows="3" class="in" placeholder="Détails, contexte, procédure…"></textarea>
         </div>
         <div class="md:col-span-3 flex items-center gap-2">
           <input type="checkbox" id="f-linkopen" class="accent-amber w-4 h-4">
@@ -706,7 +680,7 @@ function renderAdminPanel(){
     </div>`;
   hydrateIcons();
   populateDeptControls();
-  populateAssigneesOptions();
+  populateAssigneeOptions();
   renderDeptManager();
   renderUsers();
 }
@@ -736,7 +710,7 @@ function switchView(v){
 function renderAll(){
   const tabAdmin=document.getElementById('tab-admin');
   if(tabAdmin) tabAdmin.classList.toggle('hidden', !isAdmin);
-  renderView(); populateDeptControls(); populateAssigneesOptions(); renderDeptManager(); renderUsers();
+  renderView(); populateDeptControls(); populateAssigneeOptions(); renderDeptManager(); renderUsers();
 }
 function populateDeptControls(){
   const names=projectData.map(s=>s.rubrique);
@@ -749,9 +723,11 @@ function populateDeptControls(){
     sel.innerHTML=`<option value="ALL">Tous départements</option>`+names.map(n=>`<option${n===keep?' selected':''}>${esc(n)}</option>`).join('');
   }
 }
-function populateAssigneesOptions(selectedIds=[]){
-  const sel=document.getElementById('f-assignees'); if(!sel) return;
-  sel.innerHTML = users.map(u=>`<option value="${u.id}" ${selectedIds.includes(u.id)?'selected':''}>${esc(userLabel(u))}</option>`).join('');
+function populateAssigneeOptions(){
+  const sel=document.getElementById('f-assignee'); if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Non assigné</option>'+users.map(u=>`<option value="${u.id}">${esc(userLabel(u))}</option>`).join('');
+  sel.value=cur;
 }
 
 /* ============================ DÉPARTEMENTS (CRUD) ============================ */
@@ -892,43 +868,18 @@ async function handleFormSubmit(e){
   const rub=document.getElementById('f-rub').value.trim();
   const start=document.getElementById('f-start').value, end=document.getElementById('f-end').value;
   if(pDate(end)<pDate(start)){ alert("La date de fin ne peut pas précéder la date de début."); return; }
-  
-  const selectAssignees = document.getElementById('f-assignees');
-  const selectedProfileIds = Array.from(selectAssignees.selectedOptions).map(opt => opt.value);
-
-  const payload={
-    name:document.getElementById('f-name').value.trim(),
-    assignee_id: selectedProfileIds[0] || null,
-    priority:document.getElementById('f-priority').value,
-    start_date:start,
-    end_date:end,
-    progress:parseInt(document.getElementById('f-progress').value,10),
-    link:document.getElementById('f-link').value.trim()||null,
-    status:document.getElementById('f-status').value,
-    link_open:document.getElementById('f-linkopen').checked,
-    description:document.getElementById('f-desc').value.trim()||null
-  };
+  const payload={ name:document.getElementById('f-name').value.trim(), assignee_id:document.getElementById('f-assignee').value||null, assignee:null,
+    priority:document.getElementById('f-priority').value, start_date:start, end_date:end,
+    progress:parseInt(document.getElementById('f-progress').value,10), link:document.getElementById('f-link').value.trim()||null,
+    status:document.getElementById('f-status').value, link_open:document.getElementById('f-linkopen').checked, description:document.getElementById('f-desc').value.trim()||null };
   const editId=document.getElementById('edit-id').value;
   try{
     payload.department_id=await ensureDepartment(rub);
-    let taskId;
-    if(editId){
-      const { error }=await sb.from('tasks').update(payload).eq('id',editId);
-      if(error) throw error;
-      taskId = editId;
-      await sb.from('task_assignees').delete().eq('task_id', taskId);
-    } else {
-      const { data, error }=await sb.from('tasks').insert(payload).select('id').single();
-      if(error) throw error;
-      taskId = data.id;
-    }
-
-    if(selectedProfileIds.length > 0){
-      const linkRows = selectedProfileIds.map(pid => ({ task_id: taskId, profile_id: pid }));
-      await sb.from('task_assignees').insert(linkRows).catch(()=>{});
-    }
-
-    resetForm(); await loadData(); renderAll(); switchView('table');
+    let error;
+    if(editId){ ({ error }=await sb.from('tasks').update(payload).eq('id',editId)); }
+    else      { ({ error }=await sb.from('tasks').insert(payload)); }
+    if(error) throw error;
+    resetForm(); await loadData(); renderAll();
   }catch(err){ alert('Erreur : '+err.message); }
 }
 function editTask(id){
@@ -940,7 +891,8 @@ function editTask(id){
   document.getElementById('edit-id').value=id;
   document.getElementById('f-rub').value=deptName;
   document.getElementById('f-name').value=task.name;
-  populateAssigneesOptions(task.assignee_ids || (task.assignee_id ? [task.assignee_id] : []));
+  populateAssigneeOptions();
+  document.getElementById('f-assignee').value=task.assignee_id||'';
   document.getElementById('f-priority').value=task.priority||'Normal';
   document.getElementById('f-link').value=task.link||'';
   document.getElementById('f-start').value=task.start||'';
@@ -949,7 +901,7 @@ function editTask(id){
   document.getElementById('f-status').value=task.status;
   document.getElementById('f-linkopen').checked=!!task.link_open;
   document.getElementById('f-desc').value=task.description||'';
-  document.getElementById('form-title').innerHTML=icon('pencil')+' Panneau ingénieur — modifier la tâche / réunion';
+  document.getElementById('form-title').innerHTML=icon('pencil')+' Panneau ingénieur — modifier la tâche';
   document.getElementById('submit-btn').innerText='Enregistrer les modifications';
   document.getElementById('cancel-btn').classList.remove('hidden');
   hydrateIcons();
@@ -958,10 +910,9 @@ function resetForm(){
   const f=document.getElementById('task-form'); if(f) f.reset();
   const editId=document.getElementById('edit-id'); if(editId) editId.value='';
   const rv=document.getElementById('range-val'); if(rv) rv.innerText='50';
-  const ft=document.getElementById('form-title'); if(ft) ft.innerHTML=icon('settings')+' Panneau ingénieur — ajouter une tâche ou réunion';
+  const ft=document.getElementById('form-title'); if(ft) ft.innerHTML=icon('settings')+' Panneau ingénieur — ajouter une tâche';
   const sbBtn=document.getElementById('submit-btn'); if(sbBtn) sbBtn.innerText='+ Ajouter la tâche';
   const cbBtn=document.getElementById('cancel-btn'); if(cbBtn) cbBtn.classList.add('hidden');
-  populateAssigneesOptions();
   hydrateIcons();
 }
 async function deleteTask(id){
@@ -975,7 +926,7 @@ async function editLink(id){
   let task=null; for(const d of projectData){ const t=d.tasks.find(x=>x.id===id); if(t){ task=t; break; } }
   if(!task) return;
   if(me.role==='contributeur' && !task.link_open){ alert("Cette tâche n'est pas ouverte à la contribution."); return; }
-  const url=prompt("Lien de suivi (Git, Jira, visio) :", task.link||'');
+  const url=prompt("Lien de suivi (Git, Jira, télémétrie) :", task.link||'');
   if(url===null) return;
   const link=url.trim()||null;
   const { error }=await sb.from('tasks').update({ link }).eq('id',id);
@@ -1017,12 +968,12 @@ async function saveRace(){
 
 /* ============================ EXPORTS ============================ */
 function exportJSON(){
-  const out=projectData.map(s=>({ rubrique:s.rubrique, tasks:s.tasks.map(t=>({ name:t.name, assignees:t.assignee_ids, priority:t.priority, start:t.start, end:t.end, progress:t.progress, link:t.link, status:t.status })) }));
+  const out=projectData.map(s=>({ rubrique:s.rubrique, tasks:s.tasks.map(t=>({ name:t.name, assignee:t.assignee, priority:t.priority, start:t.start, end:t.end, progress:t.progress, link:t.link, status:t.status })) }));
   const a=document.createElement('a'); a.href="data:application/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(out,null,2)); a.download="paddock_planning.json"; a.click();
 }
 function exportCSV(){
-  const rows=[["Departement","Intervention","Responsable(s)","Criticite","Debut","Fin","Avancement","Statut","Lien"]];
-  projectData.forEach(s=>s.tasks.forEach(t=>rows.push([s.rubrique,t.name,assigneesLabel(t),t.priority||'',t.start||'',t.end||'',t.progress+'%',t.status,t.link||''])));
+  const rows=[["Departement","Intervention","Responsable","Criticite","Debut","Fin","Avancement","Statut","Lien"]];
+  projectData.forEach(s=>s.tasks.forEach(t=>rows.push([s.rubrique,t.name,t.assignee||'',t.priority||'',t.start||'',t.end||'',t.progress+'%',t.status,t.link||''])));
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
   const a=document.createElement('a'); a.href="data:text/csv;charset=utf-8,\uFEFF"+encodeURIComponent(csv); a.download="paddock_planning.csv"; a.click();
 }
@@ -1073,7 +1024,6 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'subtasks'}, reload)
     .on('postgres_changes',{event:'*',schema:'public',table:'departments'}, reload)
     .on('postgres_changes',{event:'*',schema:'public',table:'settings'}, reload)
-    .on('postgres_changes',{event:'*',schema:'public',table:'task_assignees'}, reload)
     .subscribe();
 }
 
