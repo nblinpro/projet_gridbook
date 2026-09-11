@@ -80,10 +80,37 @@
   .g-today{ position:absolute; top:-6px; bottom:0; width:2px; background:#4C86E0; }
   .g-today::after{ content:'Aujourd’hui'; position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-size:9px; color:#4C86E0; white-space:nowrap; }
   .g-race{ position:absolute; top:-6px; bottom:0; width:2px; background:#E10600; }
-  .g-race::after{ content:'🏁 Course'; position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-size:9px; color:#E10600; white-space:nowrap; }
+  .g-race::after{ content:'Course'; position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-size:9px; color:#E10600; white-space:nowrap; }
+
+  /* ---- Icônes ---- */
+  .ic{ width:16px; height:16px; display:inline-block; vertical-align:-3px; flex:none; }
+  .ic-lg{ width:22px; height:22px; }
+
+  /* ---- Matière ---- */
+  .bg-panel,.tile{ background-image:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0)); }
+  .tile{ box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.3); transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+  .tile:hover{ transform:translateY(-1px); border-color:#33404f; }
+  .glow-crit{ border-color:rgba(225,6,0,.55) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 0 22px -6px rgba(225,6,0,.6); }
+  .hero-tex{ background-image: radial-gradient(130% 130% at 0% 0%, rgba(76,134,224,.07), transparent 42%), radial-gradient(130% 130% at 100% 0%, rgba(225,6,0,.07), transparent 42%), linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0)); }
+  .btn{ background-image:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)); }
+  .btn:active{ transform:translateY(1px); }
+  .btn-primary{ background-image:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0)); }
+
+  /* ---- Micro-animations ---- */
+  .bar > i{ transition: width .6s cubic-bezier(.22,1,.36,1); }
+  tbody tr{ transition: background .12s ease; }
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:none;} }
+  .fade-up{ animation: fadeUp .3s ease both; }
+
+  /* ---- Chargement / squelettes ---- */
+  .sk{ position:relative; overflow:hidden; background:#161d26; border-radius:10px; }
+  .sk::after{ content:''; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent); animation:shimmer 1.3s infinite; }
+  @keyframes shimmer{ to{ transform:translateX(100%);} }
+  .spin{ width:32px; height:32px; border-radius:50%; border:3px solid #232C38; border-top-color:#E10600; animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg);} }
 
   @media (max-width:640px){ :root{ --label-w:120px; } .cd-n{ font-size:30px; } }
-  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
 </style>
 </head>
 <body class="pb-20">
@@ -137,11 +164,32 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
     </div>
   </div>
 
+  <!-- ÉCRAN : chargement (squelettes) -->
+  <div id="loading-screen" class="hidden">
+    <div class="flex items-center gap-3 mb-6"><div class="spin"></div><span class="text-mute text-sm">Chargement du paddock…</span></div>
+    <div class="bg-panel border border-line rounded-2xl p-6 mb-6">
+      <div class="grid grid-cols-1 lg:grid-cols-[240px,1fr] gap-6 items-center">
+        <div class="sk mx-auto w-full" style="height:150px;border-radius:9999px;max-width:220px"></div>
+        <div>
+          <div class="sk mb-4" style="height:14px;width:180px"></div>
+          <div class="sk mb-5" style="height:44px;width:260px"></div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="sk" style="height:66px"></div><div class="sk" style="height:66px"></div><div class="sk" style="height:66px"></div><div class="sk" style="height:66px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="bg-panel border border-line rounded-2xl p-5 space-y-3">
+      <div class="sk" style="height:16px;width:200px"></div>
+      <div class="sk" style="height:40px"></div><div class="sk" style="height:40px"></div><div class="sk" style="height:40px"></div><div class="sk" style="height:40px"></div>
+    </div>
+  </div>
+
   <!-- APPLICATION -->
   <div id="app" class="hidden">
 
     <!-- HERO -->
-    <section class="bg-panel border border-line rounded-2xl p-5 md:p-6 mb-6">
+    <section class="bg-panel hero-tex border border-line rounded-2xl p-5 md:p-6 mb-6">
       <div class="grid grid-cols-1 lg:grid-cols-[240px,1fr] gap-6 items-center">
         <div class="flex flex-col items-center">
           <div id="gauge" class="w-full max-w-[240px]" role="img" aria-label="Niveau de préparation de la voiture"></div>
@@ -170,10 +218,10 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
     <!-- PANNEAU INGÉNIEUR -->
     <section id="admin-panel" class="hidden mb-6 bg-panel border border-line rounded-2xl overflow-hidden">
       <div class="bg-panel2 border-b border-line px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
-        <h2 id="form-title" class="font-display font-bold text-white text-sm flex items-center gap-2">⚙️ Panneau ingénieur — ajouter une tâche</h2>
+        <h2 id="form-title" class="font-display font-bold text-white text-sm flex items-center gap-2"><i data-ic="settings"></i> Panneau ingénieur — ajouter une tâche</h2>
         <div class="flex items-center gap-2 flex-wrap">
-          <button class="btn" onclick="exportJSON()">📥 Exporter JSON</button>
-          <button class="btn" onclick="exportCSV()">📄 Exporter CSV</button>
+          <button class="btn" onclick="exportJSON()"><i data-ic="download"></i> Exporter JSON</button>
+          <button class="btn" onclick="exportCSV()"><i data-ic="file-text"></i> Exporter CSV</button>
         </div>
       </div>
 
@@ -192,7 +240,7 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
 
       <!-- Départements -->
       <div class="px-5 py-4 border-b border-line">
-        <h3 class="font-display font-bold text-white text-sm mb-3 flex items-center gap-2">🗂️ Départements</h3>
+        <h3 class="font-display font-bold text-white text-sm mb-3 flex items-center gap-2"><i data-ic="folder"></i> Départements</h3>
         <div id="dept-manager" class="space-y-2"></div>
         <div class="flex gap-2 mt-3">
           <input id="new-dept" class="in flex-1" placeholder="Nouveau département — ex : Sécurité & extinction"
@@ -204,12 +252,12 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
 
       <!-- Utilisateurs -->
       <div class="px-5 py-4 border-b border-line">
-        <h3 class="font-display font-bold text-white text-sm mb-3 flex items-center gap-2">👥 Utilisateurs</h3>
+        <h3 class="font-display font-bold text-white text-sm mb-3 flex items-center gap-2"><i data-ic="users"></i> Utilisateurs</h3>
         <div id="user-manager" class="space-y-2"></div>
         <form id="user-form" onsubmit="addUser(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 mt-3 items-end">
           <div class="lg:col-span-2"><label class="block text-xs text-mute mb-1">E-mail</label><input id="u-email" type="email" class="in" autocomplete="off" required></div>
           <div><label class="block text-xs text-mute mb-1">Nom</label><input id="u-name" class="in" autocomplete="off"></div>
-          <div><label class="block text-xs text-mute mb-1">Mot de passe</label><div class="flex gap-1"><input id="u-pass" type="password" class="in" minlength="6" autocomplete="new-password" required><button type="button" class="btn !px-2" onclick="genPassword()" title="Générer un mot de passe">🎲</button></div></div>
+          <div><label class="block text-xs text-mute mb-1">Mot de passe</label><div class="flex gap-1"><input id="u-pass" type="password" class="in" minlength="6" autocomplete="new-password" required><button type="button" class="btn !px-2" onclick="genPassword()" title="Générer un mot de passe"><i data-ic="dice"></i></button></div></div>
           <div><label class="block text-xs text-mute mb-1">Rôle</label><select id="u-role" class="in"><option value="lecture">Lecture</option><option value="contributeur">Contributeur</option><option value="ingenieur">Ingénieur</option></select></div>
           <button id="u-submit" type="submit" class="btn btn-primary">+ Créer</button>
         </form>
@@ -282,9 +330,9 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
     <!-- Onglets + contrôles -->
     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
       <div role="tablist" class="flex gap-2">
-        <button role="tab" id="tab-board"  aria-selected="true"  class="tab" onclick="switchView('board')">📊 Tableau de bord</button>
-        <button role="tab" id="tab-table"  aria-selected="false" class="tab" onclick="switchView('table')">📋 Interventions</button>
-        <button role="tab" id="tab-gantt"  aria-selected="false" class="tab" onclick="switchView('gantt')">📈 Gantt</button>
+        <button role="tab" id="tab-board"  aria-selected="true"  class="tab" onclick="switchView('board')"><i data-ic="layout-dashboard"></i> Tableau de bord</button>
+        <button role="tab" id="tab-table"  aria-selected="false" class="tab" onclick="switchView('table')"><i data-ic="list-checks"></i> Interventions</button>
+        <button role="tab" id="tab-gantt"  aria-selected="false" class="tab" onclick="switchView('gantt')"><i data-ic="gantt"></i> Gantt</button>
       </div>
       <div id="controls" class="hidden flex-wrap items-center gap-2">
         <input id="search" class="in max-w-[220px]" placeholder="Rechercher (tâche, responsable)…" oninput="setFilter('q', this.value)">
@@ -337,6 +385,38 @@ function canEditLink(){ return !!(me && (me.role==='ingenieur' || me.role==='con
 function deptName(id){ const d=projectData.find(x=>x.id===id); return d?d.rubrique:''; }
 function userLabel(u){ const dn=deptName(u.department_id); return (u.full_name||u.email||'—')+(dn?` — ${dn}`:''); }
 function assigneeLabel(t){ if(t.assignee_id){ const u=users.find(x=>x.id===t.assignee_id); return u?(u.full_name||u.email):'Assigné'; } return t.assignee||'Non assigné'; }
+
+/* ---- Icônes (SVG intégrés, style Lucide) ---- */
+const ICONS={
+'layout-dashboard':'<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+'list-checks':'<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+'gantt':'<path d="M3 5v14"/><path d="M8 7h9"/><path d="M6 12h11"/><path d="M11 17h6"/>',
+'settings':'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+'pencil':'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+'download':'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+'file-text':'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>',
+'folder':'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+'users':'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+'user':'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+'list':'<line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/>',
+'trash-2':'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+'chevron-up':'<path d="m18 15-6-6-6 6"/>',
+'chevron-down':'<path d="m6 9 6 6 6-6"/>',
+'chevron-right':'<path d="m9 18 6-6-6-6"/>',
+'wrench':'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+'lock':'<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+'lock-open':'<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
+'link':'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+'external-link':'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+'check-square':'<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+'check-circle':'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>',
+'flag':'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+'x':'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+'dice':'<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M16 8h.01"/><path d="M8 8h.01"/><path d="M8 16h.01"/><path d="M16 16h.01"/><path d="M12 12h.01"/>'
+};
+function icon(name, cls=''){ return `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]||''}</svg>`; }
+function hydrateIcons(){ document.querySelectorAll('i[data-ic]').forEach(el=>{ const t=document.createElement('template'); t.innerHTML=icon(el.getAttribute('data-ic'), el.className||''); if(t.content.firstChild) el.replaceWith(t.content.firstChild); }); }
+function countUp(el, to){ if(!el) return; if(REDUCE){ el.innerText=to; return; } const from=parseInt(el.innerText,10)||0; if(from===to){ el.innerText=to; return; } const dur=500,t0=performance.now(); (function s(now){ const k=Math.min(1,(now-t0)/dur); el.innerText=Math.round(from+(to-from)*k); if(k<1) requestAnimationFrame(s); })(performance.now()); }
 
 /* ============================ HELPERS ============================ */
 const esc = (s='')=> String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
@@ -419,10 +499,10 @@ function startCountdown(){ if(cdTimer) return; refreshEventLabel(); tickCountdow
 /* ============================ HERO ============================ */
 function renderHero(){
   const s=stats();
-  document.getElementById('k-open').innerText=s.open;
-  document.getElementById('k-crit').innerText=s.crit;
-  const late=document.getElementById('k-late'); late.innerText=s.late; late.className='tile-num font-display tnum '+(s.late>0?'text-rosso':'text-mute');
-  document.getElementById('k-ready').innerText=s.ready;
+  countUp(document.getElementById('k-open'), s.open);
+  const crit=document.getElementById('k-crit'); countUp(crit, s.crit); crit.closest('.tile').classList.toggle('glow-crit', s.crit>0);
+  const late=document.getElementById('k-late'); countUp(late, s.late); late.className='tile-num font-display tnum '+(s.late>0?'text-rosso':'text-mute');
+  countUp(document.getElementById('k-ready'), s.ready);
   renderGauge(s.avg, !gaugeAnimated); gaugeAnimated=true;
 }
 
@@ -462,7 +542,7 @@ function renderBoard(){
     <div class="flex items-center justify-between gap-3 py-2.5 border-b border-line last:border-0 ${isAdmin?'cursor-pointer hover:bg-panel2/50 px-2 -mx-2 rounded-lg':''}" ${isAdmin?`onclick="editTask(${a.t.id})"`:''}>
       <div class="min-w-0"><div class="text-sm text-ink truncate">${esc(a.t.name)}</div><div class="text-xs text-mute truncate">${esc(assigneeLabel(a.t))} · échéance ${fmtDM(a.t.end)}</div></div>
       <div class="flex items-center gap-1.5 shrink-0">${a.crit?'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Bloquant</span>':''}${a.late?'<span class="badge bg-amber/15 text-amber border-amber/40">En retard</span>':''}</div>
-    </div>`).join('') : `<div class="text-sm text-mute py-6 text-center">Aucun point bloquant. La voiture avance selon le plan. 🟢</div>`;
+    </div>`).join('') : `<div class="text-sm text-mute py-6 text-center flex items-center justify-center gap-2"><span class="text-go">${icon('check-circle')}</span> Aucun point bloquant. La voiture avance selon le plan.</div>`;
 
   document.getElementById('view').innerHTML=`
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -485,7 +565,7 @@ function renderTable(){
   if(!data.length){ document.getElementById('view').innerHTML=emptyState('Aucune intervention ne correspond au filtre.'); return; }
   document.getElementById('view').innerHTML=data.map(sec=>`
     <div class="bg-panel border border-line rounded-2xl overflow-hidden mb-5">
-      <div class="bg-panel2 border-b border-line px-5 py-3.5 flex justify-between items-center"><h2 class="font-display font-bold text-sm text-ink flex items-center gap-2">🔧 ${esc(sec.rubrique)}</h2><span class="badge bg-surface text-mute border-line">${sec.tasks.length} tâche(s)</span></div>
+      <div class="bg-panel2 border-b border-line px-5 py-3.5 flex justify-between items-center"><h2 class="font-display font-bold text-sm text-ink flex items-center gap-2">${icon('wrench')} ${esc(sec.rubrique)}</h2><span class="badge bg-surface text-mute border-line">${sec.tasks.length} tâche(s)</span></div>
       <div class="overflow-x-auto"><table class="w-full text-left text-xs min-w-[820px]">
         <thead class="text-mute border-b border-line"><tr>
           <th class="py-3 px-5 font-semibold">Intervention</th><th class="py-3 px-5 font-semibold">Responsable</th><th class="py-3 px-5 font-semibold">Criticité</th><th class="py-3 px-5 font-semibold">Planning</th><th class="py-3 px-5 font-semibold">Statut</th><th class="py-3 px-5 font-semibold w-40">Avancement</th><th class="py-3 px-5 font-semibold text-right">Actions</th>
@@ -495,8 +575,8 @@ function renderTable(){
           const main=`
           <tr class="${isLate(t)?'overdue-row':''}">
             <td class="py-3.5 px-5 font-semibold text-ink">
-              <button onclick="toggleExpand(${t.id})" class="text-mute hover:text-ink mr-1" title="Détails" aria-label="Afficher les détails">${open?'▾':'▸'}</button>
-              ${esc(t.name)} ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1">retard</span>':''}${t.link_open?'<span class="badge bg-amber/15 text-amber border-amber/40 ml-1">🔓 contrib.</span>':''}${total?`<span class="badge bg-panel2 text-mute border-line ml-1">☑ ${done}/${total}</span>`:''}
+              <button onclick="toggleExpand(${t.id})" class="text-mute hover:text-ink mr-1" title="Détails" aria-label="Afficher les détails">${open?icon('chevron-down'):icon('chevron-right')}</button>
+              ${esc(t.name)} ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1">retard</span>':''}${t.link_open?`<span class="badge bg-amber/15 text-amber border-amber/40 ml-1">${icon('lock-open')} contrib.</span>`:''}${total?`<span class="badge bg-panel2 text-mute border-line ml-1">${icon('check-square')} ${done}/${total}</span>`:''}
             </td>
             <td class="py-3.5 px-5 text-mute">${esc(assigneeLabel(t))}</td>
             <td class="py-3.5 px-5">${prioBadge(t.priority)}</td>
@@ -504,13 +584,13 @@ function renderTable(){
             <td class="py-3.5 px-5">${statusBadge(t.status)}</td>
             <td class="py-3.5 px-5"><div class="flex items-center gap-2"><div class="bar flex-1"><i style="width:${t.progress}%"></i></div><span class="font-display tnum text-mute w-9 text-right">${t.progress}%</span></div></td>
             <td class="py-3.5 px-5 text-right whitespace-nowrap">
-              ${t.link?`<a href="${esc(t.link)}" target="_blank" rel="noopener" class="text-info hover:underline">Suivi</a>`:''}
+              ${t.link?`<a href="${esc(t.link)}" target="_blank" rel="noopener" class="text-info hover:underline">${icon('external-link')} Suivi</a>`:''}
               ${isAdmin
-                ? `<button onclick="toggleLinkOpen(${t.id}, ${t.link_open?'false':'true'})" class="ml-2 ${t.link_open?'text-amber hover:bg-amber/10':'text-mute hover:bg-panel2'} rounded-md px-1.5 py-1" title="${t.link_open?'Fermer la contribution sur le lien':'Ouvrir le lien à la contribution'}">${t.link_open?'🔓':'🔒'}</button><button onclick="editTask(${t.id})" class="text-amber hover:bg-amber/10 rounded-md px-1.5 py-1" title="Modifier" aria-label="Modifier">✏️</button><button onclick="deleteTask(${t.id})" class="text-rosso hover:bg-rosso/10 rounded-md px-1.5 py-1" title="Supprimer" aria-label="Supprimer">🗑️</button>`
+                ? `<button onclick="toggleLinkOpen(${t.id}, ${t.link_open?'false':'true'})" class="ml-2 ${t.link_open?'text-amber hover:bg-amber/10':'text-mute hover:bg-panel2'} rounded-md px-1.5 py-1" title="${t.link_open?'Fermer la contribution sur le lien':'Ouvrir le lien à la contribution'}">${t.link_open?icon('lock-open'):icon('lock')}</button><button onclick="editTask(${t.id})" class="text-amber hover:bg-amber/10 rounded-md px-1.5 py-1" title="Modifier" aria-label="Modifier">${icon('pencil')}</button><button onclick="deleteTask(${t.id})" class="text-rosso hover:bg-rosso/10 rounded-md px-1.5 py-1" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>`
                 : (me && me.role==='contributeur')
                   ? (t.link_open
-                      ? `<button onclick="editLink(${t.id})" class="ml-2 text-info hover:bg-info/10 rounded-md px-2 py-1" title="Ajouter / modifier le lien de suivi">🔗 Lien</button>`
-                      : `<span class="ml-2 text-mute px-2 py-1 inline-block" title="Ouvert par l'ingénieur uniquement">🔒</span>`)
+                      ? `<button onclick="editLink(${t.id})" class="ml-2 text-info hover:bg-info/10 rounded-md px-2 py-1" title="Ajouter / modifier le lien de suivi">${icon('link')} Lien</button>`
+                      : `<span class="ml-2 text-mute px-2 py-1 inline-block" title="Ouvert par l'ingénieur uniquement">${icon('lock')}</span>`)
                   : ''}
             </td>
           </tr>`;
@@ -528,7 +608,7 @@ function renderTable(){
                     <label class="flex items-center gap-2 text-sm">
                       <input type="checkbox" ${s.done?'checked':''} ${isAdmin?'':'disabled'} onchange="toggleSubtask(${s.id}, this.checked)" class="accent-go w-4 h-4">
                       <span class="${s.done?'line-through text-mute':'text-ink'}">${esc(s.title)}</span>
-                      ${isAdmin?`<button onclick="deleteSubtask(${s.id})" class="ml-auto text-rosso hover:bg-rosso/10 rounded px-1.5" title="Supprimer">✕</button>`:''}
+                      ${isAdmin?`<button onclick="deleteSubtask(${s.id})" class="ml-auto text-rosso hover:bg-rosso/10 rounded px-1.5" title="Supprimer">${icon('x')}</button>`:''}
                     </label>`).join(''):'<span class="text-mute text-sm">Aucune sous-tâche.</span>'}</div>
                   ${isAdmin?`<div class="flex gap-2 mt-2"><input id="sub-input-${t.id}" class="in flex-1" placeholder="Nouvelle sous-tâche…" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtask(${t.id});}"><button class="btn" onclick="addSubtask(${t.id})">+ Ajouter</button></div>`:''}
                 </div>
@@ -556,7 +636,7 @@ function renderGantt(){
   const todayLine=`<div class="g-today" style="left:${pct(today0()).toFixed(2)}%"></div>`;
   const raceLine=isNaN(raceD)?'':`<div class="g-race" style="left:${pct(new Date(raceD.getFullYear(),raceD.getMonth(),raceD.getDate())).toFixed(2)}%"></div>`;
   const rows=data.map(sec=>`
-    <div class="mb-4"><div class="text-xs font-display font-bold text-ink bg-panel2 rounded-lg px-3 py-2 mb-2 inline-flex items-center gap-2">🏁 ${esc(sec.rubrique)}</div>
+    <div class="mb-4"><div class="text-xs font-display font-bold text-ink bg-panel2 rounded-lg px-3 py-2 mb-2 inline-flex items-center gap-2">${icon('flag')} ${esc(sec.rubrique)}</div>
     ${sec.tasks.map(t=>{ const l=pct(pDate(t.start)),w=Math.max(1.5,pct(pDate(t.end))-l),col=prioColor(t.priority);
       return `<div class="g-row" title="${esc(t.name)} — ${esc(assigneeLabel(t))}&#10;${fmtDM(t.start)} → ${fmtDM(t.end)} · ${t.progress}% · ${esc(t.status)}">
         <div class="g-label truncate">${esc(t.name)}<br><small>${esc(assigneeLabel(t))}</small></div>
@@ -572,11 +652,11 @@ function renderGantt(){
       </div>
     </div>`;
 }
-function emptyState(msg){ return `<div class="bg-panel border border-line rounded-2xl py-16 text-center"><div class="text-3xl mb-2">🏁</div><p class="text-sm text-mute">${esc(msg)}</p></div>`; }
+function emptyState(msg){ return `<div class="bg-panel border border-line rounded-2xl py-16 text-center"><div class="mb-2 flex justify-center text-mute">${icon('flag','ic-lg')}</div><p class="text-sm text-mute">${esc(msg)}</p></div>`; }
 
 /* ============================ ROUTAGE ============================ */
 function renderView(){ if(currentView==='board') renderBoard(); else if(currentView==='table') renderTable(); else renderGantt(); }
-function switchView(v){ currentView=v; ['board','table','gantt'].forEach(k=>document.getElementById('tab-'+k).setAttribute('aria-selected',k===v)); document.getElementById('controls').classList.toggle('hidden',v==='board'); renderView(); }
+function switchView(v){ currentView=v; ['board','table','gantt'].forEach(k=>document.getElementById('tab-'+k).setAttribute('aria-selected',k===v)); document.getElementById('controls').classList.toggle('hidden',v==='board'); renderView(); const vw=document.getElementById('view'); vw.classList.remove('fade-up'); void vw.offsetWidth; vw.classList.add('fade-up'); }
 function renderAll(){
   document.getElementById('admin-panel').classList.toggle('hidden', !isAdmin);
   if(isAdmin){ const rn=document.getElementById('race-name'),rd=document.getElementById('race-date'); if(document.activeElement!==rn) rn.value=race.name||''; if(document.activeElement!==rd) rd.value=race.date||''; }
@@ -605,11 +685,11 @@ function renderDeptManager(){
   el.innerHTML=projectData.map((sec,i)=>`
     <div class="flex items-center gap-2">
       <input class="in flex-1" value="${esc(sec.rubrique)}" aria-label="Nom du département" onchange="renameDept(${sec.id}, this.value)" onkeydown="if(event.key==='Enter')this.blur()">
-      <span class="badge bg-surface text-mute border-line shrink-0" title="Tâches">📋 ${sec.tasks.length}</span>
-      <span class="badge bg-surface text-mute border-line shrink-0" title="Membres affiliés">👤 ${users.filter(u=>u.department_id===sec.id).length}</span>
-      <button class="btn !px-2.5 !py-2 disabled:opacity-40 disabled:pointer-events-none" onclick="moveDept(${sec.id},-1)" ${i===0?'disabled':''} title="Monter" aria-label="Monter">↑</button>
-      <button class="btn !px-2.5 !py-2 disabled:opacity-40 disabled:pointer-events-none" onclick="moveDept(${sec.id},1)" ${i===last?'disabled':''} title="Descendre" aria-label="Descendre">↓</button>
-      <button class="btn !px-2.5 !py-2 !text-rosso" onclick="deleteDept(${sec.id})" title="Supprimer" aria-label="Supprimer">🗑️</button>
+      <span class="badge bg-surface text-mute border-line shrink-0" title="Tâches">${icon('list')} ${sec.tasks.length}</span>
+      <span class="badge bg-surface text-mute border-line shrink-0" title="Membres affiliés">${icon('user')} ${users.filter(u=>u.department_id===sec.id).length}</span>
+      <button class="btn !px-2.5 !py-2 disabled:opacity-40 disabled:pointer-events-none" onclick="moveDept(${sec.id},-1)" ${i===0?'disabled':''} title="Monter" aria-label="Monter">${icon('chevron-up')}</button>
+      <button class="btn !px-2.5 !py-2 disabled:opacity-40 disabled:pointer-events-none" onclick="moveDept(${sec.id},1)" ${i===last?'disabled':''} title="Descendre" aria-label="Descendre">${icon('chevron-down')}</button>
+      <button class="btn !px-2.5 !py-2 !text-rosso" onclick="deleteDept(${sec.id})" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
     </div>`).join('');
 }
 const deptExists=(name,exceptId)=> projectData.some(s=> s.id!==exceptId && s.rubrique.trim().toLowerCase()===name.trim().toLowerCase());
@@ -673,7 +753,7 @@ function renderUsers(){
         <option value="contributeur"${u.role==='contributeur'?' selected':''}>Contributeur</option>
         <option value="ingenieur"${u.role==='ingenieur'?' selected':''}>Ingénieur</option>
       </select>
-      <button class="btn !px-2.5 !py-2 !text-rosso disabled:opacity-40 disabled:pointer-events-none" ${self?'disabled':''} onclick="deleteUser('${u.id}','${esc(u.email||'')}')" title="Supprimer" aria-label="Supprimer">🗑️</button>
+      <button class="btn !px-2.5 !py-2 !text-rosso disabled:opacity-40 disabled:pointer-events-none" ${self?'disabled':''} onclick="deleteUser('${u.id}','${esc(u.email||'')}')" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
     </div>`;
   }).join('');
 }
@@ -762,7 +842,7 @@ function editTask(id){
   document.getElementById('f-status').value=task.status;
   document.getElementById('f-linkopen').checked=!!task.link_open;
   document.getElementById('f-desc').value=task.description||'';
-  document.getElementById('form-title').innerHTML='✏️ Panneau ingénieur — modifier la tâche';
+  document.getElementById('form-title').innerHTML=icon('pencil')+' Panneau ingénieur — modifier la tâche';
   document.getElementById('submit-btn').innerText='Enregistrer les modifications';
   document.getElementById('cancel-btn').classList.remove('hidden');
   document.getElementById('admin-panel').scrollIntoView({behavior:REDUCE?'auto':'smooth'});
@@ -771,7 +851,7 @@ function resetForm(){
   document.getElementById('task-form').reset();
   document.getElementById('edit-id').value='';
   document.getElementById('range-val').innerText='50';
-  document.getElementById('form-title').innerHTML='⚙️ Panneau ingénieur — ajouter une tâche';
+  document.getElementById('form-title').innerHTML=icon('settings')+' Panneau ingénieur — ajouter une tâche';
   document.getElementById('submit-btn').innerText='+ Ajouter la tâche';
   document.getElementById('cancel-btn').classList.add('hidden');
 }
@@ -841,6 +921,7 @@ function exportCSV(){
 function show(screen){
   document.getElementById('setup-screen').classList.toggle('hidden', screen!=='setup');
   document.getElementById('login-screen').classList.toggle('hidden', screen!=='login');
+  document.getElementById('loading-screen').classList.toggle('hidden', screen!=='loading');
   document.getElementById('app').classList.toggle('hidden', screen!=='app');
   document.getElementById('user-area').classList.toggle('hidden', screen!=='app');
 }
@@ -863,12 +944,13 @@ async function doLogin(e){
 async function logout(){ try{ await sb.auth.signOut(); }finally{ location.reload(); } }
 async function afterLogin(session){
   me={ id:session.user.id, email:session.user.email, role:'lecture' };
+  show('loading');
   const { data:prof }=await sb.from('profiles').select('role,full_name,email').eq('id',me.id).maybeSingle();
   if(prof){ me.role=prof.role; me.full_name=prof.full_name; }
   isAdmin = me.role==='ingenieur';
   await loadData();
   await loadUsers();
-  show('app'); renderUserArea();
+  show('app'); document.getElementById('app').classList.add('fade-up'); renderUserArea();
   gaugeAnimated=false; renderAll(); startCountdown(); subscribeRealtime();
 }
 
@@ -886,6 +968,7 @@ function subscribeRealtime(){
 
 /* ============================ DÉMARRAGE ============================ */
 async function boot(){
+  hydrateIcons();
   if(!CONFIGURED){ show('setup'); if(!window.supabase) document.getElementById('setup-sdk').classList.remove('hidden'); return; }
   if(!sb){ show('setup'); document.getElementById('setup-sdk').classList.remove('hidden'); return; }
   try{
