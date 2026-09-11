@@ -462,6 +462,7 @@ async function loadData(){
   const byDept = {};
   (t.data||[]).forEach(x=>{ const mt=mapTask(x); mt.subtasks=subByTask[x.id]||[]; (byDept[x.department_id] ||= []).push(mt); });
   projectData = (d.data||[]).map(dep=>({ id:dep.id, rubrique:dep.name, position:dep.position, tasks:(byDept[dep.id]||[]) }));
+  if(me && !isAdmin) projectData = projectData.filter(s=> s.id === me.department_id);
   if(r && r.data && r.data.value) race = r.data.value;
 }
 
@@ -670,7 +671,9 @@ function renderGantt(){
 function emptyState(msg){ return `<div class="bg-panel border border-line rounded-2xl py-16 text-center"><div class="mb-2 flex justify-center text-mute">${icon('flag','ic-lg')}</div><p class="text-sm text-mute">${esc(msg)}</p></div>`; }
 
 /* ============================ ROUTAGE ============================ */
-function renderView(){ if(currentView==='board') renderBoard(); else if(currentView==='table') renderTable(); else renderGantt(); }
+function renderView(){
+  if(me && !isAdmin && !me.department_id){ document.getElementById('view').innerHTML=emptyState("Aucun département ne t'a été attribué. Un ingénieur doit te rattacher à un département pour que les tâches s'affichent."); return; }
+  if(currentView==='board') renderBoard(); else if(currentView==='table') renderTable(); else renderGantt(); }
 function switchView(v){ currentView=v; ['board','table','gantt'].forEach(k=>document.getElementById('tab-'+k).setAttribute('aria-selected',k===v)); document.getElementById('controls').classList.toggle('hidden',v==='board'); renderView(); const vw=document.getElementById('view'); vw.classList.remove('fade-up'); void vw.offsetWidth; vw.classList.add('fade-up'); }
 function renderAll(){
   document.getElementById('admin-panel').classList.toggle('hidden', !isAdmin);
@@ -962,8 +965,8 @@ async function logout(){ try{ await sb.auth.signOut(); }finally{ location.reload
 async function afterLogin(session){
   me={ id:session.user.id, email:session.user.email, role:'lecture' };
   show('loading');
-  const { data:prof }=await sb.from('profiles').select('role,full_name,email').eq('id',me.id).maybeSingle();
-  if(prof){ me.role=prof.role; me.full_name=prof.full_name; }
+  const { data:prof }=await sb.from('profiles').select('role,full_name,email,department_id').eq('id',me.id).maybeSingle();
+  if(prof){ me.role=prof.role; me.full_name=prof.full_name; me.department_id=prof.department_id; }
   isAdmin = me.role==='ingenieur';
   await loadData();
   await loadUsers();
