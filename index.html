@@ -255,7 +255,7 @@ let gaugeAnimated = false, gaugeShown = 0;
 let cdTimer = null, channel = null;
 
 const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const C = { rosso:'#E10600', amber:'#F5A623', go:'#2ED47A', info:'#4C86E0', mute:'#8B98A8', line:'#2A333F' };
+const C = { rosso:'#E10600', amber:'#F5A623', go:'#2ED47A', info:'#4C86E0', mute:'#8B98A8', line:'#2A333F', meet:'#A78BFA' };
 function canEditLink(){ return !!(me && (me.role==='ingenieur' || me.role==='contributeur')); }
 function deptName(id){ const d=projectData.find(x=>x.id===id); return d?d.rubrique:''; }
 function userLabel(u){ const dn=deptName(u.department_id); return (u.full_name||u.email||'—')+(dn?` — ${dn}`:''); }
@@ -569,8 +569,13 @@ function renderGantt(){
   let dates=[]; data.forEach(s=>s.tasks.forEach(t=>{ dates.push(pDate(t.start)); dates.push(pDate(t.end)); }));
   const raceD=new Date(race.date); if(!isNaN(raceD)) dates.push(new Date(raceD.getFullYear(),raceD.getMonth(),raceD.getDate()));
   dates.push(today0());
-  if(!data.length||!dates.length){ document.getElementById('view').innerHTML=emptyState('Aucune tâche planifiée à afficher.'); return; }
+  // Réunions : mêmes filtres que les tâches (département, recherche). Les réunions à venir élargissent l'axe ; les passées ne s'affichent que si elles tombent dedans.
+  const q=filters.q.trim().toLowerCase();
+  let mtgs=meetings.filter(m=> (filters.dept==='ALL' || !m.department_id || allDeptNames[m.department_id]===filters.dept) && (!q || (m.title||'').toLowerCase().includes(q)));
+  mtgs.forEach(m=>{ if(new Date(m.ends_at)>=today0()) dates.push(new Date(m.ends_at)); });
+  if(!data.length && !mtgs.length){ document.getElementById('view').innerHTML=emptyState('Aucune tâche ni réunion planifiée à afficher.'); return; }
   const DAY=86400000; let min=new Date(Math.min(...dates)),max=new Date(Math.max(...dates)); min=new Date(min-2*DAY); max=new Date(+max+3*DAY);
+  mtgs=mtgs.filter(m=> new Date(m.ends_at)>=min && new Date(m.starts_at)<=max);
   const span=Math.max(DAY,max-min), pct=d=>((d-min)/span)*100;
   let ticks=[],cur=new Date(min); cur.setDate(cur.getDate()+((8-cur.getDay())%7)); while(cur<=max){ ticks.push(new Date(cur)); cur=new Date(+cur+7*DAY); }
   const grid=ticks.map(d=>`<div class="g-grid" style="left:${pct(d).toFixed(2)}%"></div>`).join('');
@@ -584,13 +589,21 @@ function renderGantt(){
         <div class="g-label truncate">${esc(t.name)}<br><small>${esc(assigneeLabel(t))}</small></div>
         <div class="g-track"><div class="g-bar" style="left:${l.toFixed(2)}%; width:${w.toFixed(2)}%; background:${col}22; border:1px solid ${col}"><div class="fill" style="width:${t.progress}%; background:${col}"></div><span class="lab" style="color:${t.progress>55?'#0B0E13':'#E6EDF3'}">${t.progress}%</span></div></div>
       </div>`; }).join('')}</div>`).join('');
+  const meetingRows=mtgs.map(m=>{ const s=new Date(m.starts_at), e=new Date(m.ends_at), l=pct(s), w=Math.max(0.8,pct(e)-l), live=s<=Date.now()&&Date.now()<e;
+    const when=`${fmtDM(toLocalInput(s).slice(0,10))} ${fmtTime(s)}`;
+    return `<div class="g-row cursor-pointer" onclick="switchView('meetings')" title="${esc(m.title)}&#10;${esc(fmtDay(s))} · ${fmtTime(s)} → ${fmtTime(e)}${m.location?' · '+esc(m.location):''}">
+      <div class="g-label truncate">${esc(m.title)}<br><small>${when}${live?' · en cours':''}</small></div>
+      <div class="g-track"><div class="g-bar" style="left:${l.toFixed(2)}%; width:${w.toFixed(2)}%; min-width:8px; background:${C.meet}; border:1px solid ${C.meet}"></div></div>
+    </div>`; }).join('');
+  const meetingSection=mtgs.length?`
+    <div class="mt-2"><div class="text-xs font-display font-bold text-ink bg-panel2 rounded-lg px-3 py-2 mb-2 inline-flex items-center gap-2">${icon('calendar')} Réunions</div>${meetingRows}</div>`:'';
   document.getElementById('view').innerHTML=`
     <div class="bg-panel border border-line rounded-2xl p-5 overflow-x-auto">
       <div class="flex items-center justify-between mb-4"><h3 class="font-display font-bold text-white text-sm">Chronogramme paddock</h3>
-        <div class="flex items-center gap-4 text-[10px] text-mute"><span class="flex items-center gap-1.5"><i class="inline-block w-3 h-0.5" style="background:${C.info}"></i>Aujourd’hui</span><span class="flex items-center gap-1.5"><i class="inline-block w-3 h-0.5" style="background:${C.rosso}"></i>Course</span></div></div>
+        <div class="flex items-center gap-4 text-[10px] text-mute"><span class="flex items-center gap-1.5"><i class="inline-block w-3 h-0.5" style="background:${C.info}"></i>Aujourd’hui</span><span class="flex items-center gap-1.5"><i class="inline-block w-3 h-0.5" style="background:${C.rosso}"></i>Course</span>${mtgs.length?`<span class="flex items-center gap-1.5"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${C.meet}"></i>Réunion</span>`:''}</div></div>
       <div class="min-w-[760px]">
         <div class="g-row mb-2" style="height:20px"><div class="g-label"></div><div class="relative flex-1 h-full">${axis}</div></div>
-        <div class="g-body pt-1"><div class="g-overlay">${grid}</div>${rows}<div class="g-overlay">${todayLine}${raceLine}</div></div>
+        <div class="g-body pt-1"><div class="g-overlay">${grid}</div>${rows}${meetingSection}<div class="g-overlay">${todayLine}${raceLine}</div></div>
       </div>
     </div>`;
 }
