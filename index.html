@@ -662,11 +662,12 @@ function renderMeetings(){
         <div><label class="block text-xs text-mute mb-1">Fin</label><input id="m-end" type="datetime-local" class="in" required></div>
         <div><label class="block text-xs text-mute mb-1">Lieu</label><input id="m-location" class="in" placeholder="Ex : Motorhome, salle briefing"></div>
         <div class="md:col-span-3"><label class="block text-xs text-mute mb-1">Lien visio (optionnel)</label><input id="m-link" type="url" class="in" placeholder="https://teams.microsoft.com/…"></div>
-        <div class="md:col-span-3"><div class="flex items-center gap-3 mb-1"><label class="text-xs text-mute">Participants <span class="text-mute/70">— seuls les invités verront la réunion</span></label>
+        <div class="md:col-span-3"><div class="flex items-center gap-3 mb-1"><label class="text-xs text-mute">Participants <span class="text-mute/70">— ingénieurs</span></label>
           <button type="button" class="text-xs text-info hover:underline" onclick="setAllParticipants(true)">Tout cocher</button>
           <button type="button" class="text-xs text-info hover:underline" onclick="setAllParticipants(false)">Tout décocher</button></div>
-          <div id="m-participants" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-40 overflow-y-auto">${users.length?users.map(u=>`
-            <label class="flex items-center gap-2 text-sm text-ink"><input type="checkbox" value="${esc(u.id)}" class="accent-go w-4 h-4"> ${esc(userLabel(u))}</label>`).join(''):'<span class="text-xs text-mute">Aucun utilisateur.</span>'}</div></div>
+          <div id="m-participants" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-40 overflow-y-auto">${engineers().length?engineers().map(u=>`
+            <label class="flex items-start gap-2 text-sm text-ink"><input type="checkbox" value="${esc(u.id)}" class="accent-go w-4 h-4 mt-0.5">
+              <span class="min-w-0"><span class="block truncate">${esc(userLabel(u))}</span><span class="block text-xs text-mute truncate">${esc(u.email||'')}</span></span></label>`).join(''):'<span class="text-xs text-mute">Aucun ingénieur.</span>'}</div></div>
         <div class="md:col-span-3"><label class="block text-xs text-mute mb-1">Ordre du jour (optionnel)</label><textarea id="m-desc" rows="3" class="in" placeholder="Points à aborder…"></textarea></div>
         <div class="md:col-span-3 flex justify-end gap-3">
           <button type="button" id="m-cancel" onclick="resetMeetingForm()" class="btn hidden">Annuler</button>
@@ -678,6 +679,7 @@ function renderMeetings(){
   if(isAdmin) resetMeetingForm();
   renderMeetingList();
 }
+function engineers(){ return users.filter(u=>u.role==='ingenieur'); }
 function setAllParticipants(on){ document.querySelectorAll('#m-participants input[type=checkbox]').forEach(c=>{ c.checked=on; }); }
 function inviteDept(value){
   if(value==='') return;
@@ -724,7 +726,6 @@ async function saveMeeting(e){
     location:document.getElementById('m-location').value.trim()||null, link:safeUrl(rawLink),
     description:document.getElementById('m-desc').value.trim()||null, department_id:dept===''?null:Number(dept) };
   const participants=[...document.querySelectorAll('#m-participants input[type=checkbox]:checked')].map(c=>c.value);
-  if(!participants.length && !confirm("Aucun participant coché : seuls les ingénieurs verront cette réunion. Continuer ?")) return;
   const editId=document.getElementById('m-edit-id').value;
   const btn=document.getElementById('m-submit'); btn.disabled=true;
   try{
