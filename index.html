@@ -246,6 +246,7 @@ let race = { name:'—', date:'' };
 let me = null, isAdmin = false;
 let users = [];
 let meetings = [];
+let allDeptNames = {};
 let showPastMeetings = false;
 let expanded = new Set();
 let currentView = 'pitwall';
@@ -330,6 +331,7 @@ async function loadData(){
   const byDept = {};
   (t.data||[]).forEach(x=>{ const mt=mapTask(x); mt.subtasks=subByTask[x.id]||[]; (byDept[x.department_id] ||= []).push(mt); });
   projectData = (d.data||[]).map(dep=>({ id:dep.id, rubrique:dep.name, position:dep.position, tasks:(byDept[dep.id]||[]) }));
+  allDeptNames = Object.fromEntries((d.data||[]).map(dep=>[dep.id, dep.name]));   // avant filtrage : sert aux libellés (réunions)
   if(me && !isAdmin) projectData = projectData.filter(s=> s.id === me.department_id);
   if(r && r.data && r.data.value) race = r.data.value;
   await loadMeetings();
@@ -598,7 +600,7 @@ const fmtDay  = d => d.toLocaleDateString('fr-FR',{ weekday:'long', day:'numeric
 const fmtTime = d => d.toLocaleTimeString('fr-FR',{ hour:'2-digit', minute:'2-digit' });
 function toLocalInput(d){ const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
 function userName(id){ const u=users.find(x=>x.id===id); return u?(u.full_name||u.email):'Participant'; }
-function meetingScope(m){ return m.department_id ? (deptName(m.department_id)||'Autre département') : 'Toutes équipes'; }
+function meetingScope(m){ return m.department_id ? (allDeptNames[m.department_id]||'Autre département') : 'Toutes équipes'; }
 function nextMeeting(){ const now=Date.now(); return meetings.find(m=> new Date(m.ends_at).getTime()>=now) || null; }
 
 function meetingCard(m){
@@ -1186,7 +1188,7 @@ function renderUserArea(){
   const el=document.getElementById('user-area'); if(!me){ el.innerHTML=''; return; }
   const badges={ ingenieur:'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Ingénieur</span>', contributeur:'<span class="badge bg-amber/15 text-amber border-amber/40">Contributeur</span>', lecture:'<span class="badge bg-info/15 text-info border-info/40">Lecture seule</span>' };
   const roleBadge = badges[me.role] || badges.lecture;
-  el.innerHTML=`<span class="hidden sm:inline text-xs text-mute">${esc(me.full_name||me.email||'')}</span>${roleBadge}<button class="btn btn-ghost" onclick="logout()">Déconnexion</button>`;
+  el.innerHTML=`<span class="hidden sm:inline text-xs text-mute text-right leading-tight">${esc(me.full_name||me.email||'')}${me.full_name?`<br><span class="text-[10px]">${esc(me.email||'')}</span>`:''}</span>${roleBadge}<button class="btn btn-ghost" onclick="logout()">Déconnexion</button>`;
 }
 async function doLogin(e){
   e.preventDefault();
