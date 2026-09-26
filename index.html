@@ -203,6 +203,7 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
         <button role="tab" id="tab-board"   aria-selected="false" class="tab" onclick="switchView('board')"><i data-ic="layout-dashboard"></i> Tableau de bord</button>
         <button role="tab" id="tab-table"   aria-selected="false" class="tab" onclick="switchView('table')"><i data-ic="list-checks"></i> Interventions</button>
         <button role="tab" id="tab-gantt"   aria-selected="false" class="tab" onclick="switchView('gantt')"><i data-ic="gantt"></i> Gantt</button>
+        <button role="tab" id="tab-meetings" aria-selected="false" class="tab" onclick="switchView('meetings')"><i data-ic="calendar"></i> Réunions</button>
         <button role="tab" id="tab-admin"   aria-selected="false" class="tab hidden" onclick="switchView('admin')"><i data-ic="settings"></i> Panneau ingénieur — ajouter une tâche</button>
       </div>
       <div id="controls" class="hidden flex-wrap items-center gap-2">
@@ -244,6 +245,8 @@ let projectData = [];
 let race = { name:'—', date:'' };
 let me = null, isAdmin = false;
 let users = [];
+let meetings = [];
+let showPastMeetings = false;
 let expanded = new Set();
 let currentView = 'pitwall';
 let filters = { q:'', status:'ALL', priority:'ALL', dept:'ALL', sort:'date' };
@@ -286,6 +289,10 @@ const ICONS={
 'check-circle':'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>',
 'flag':'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
 'x':'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+'calendar':'<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+'clock':'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+'map-pin':'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+'video':'<path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 11"/><rect width="14" height="12" x="2" y="6" rx="2"/>',
 'dice':'<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M16 8h.01"/><path d="M8 8h.01"/><path d="M8 16h.01"/><path d="M16 16h.01"/><path d="M12 12h.01"/>'
 };
 function icon(name, cls=''){ return `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]||''}</svg>`; }
@@ -325,6 +332,16 @@ async function loadData(){
   projectData = (d.data||[]).map(dep=>({ id:dep.id, rubrique:dep.name, position:dep.position, tasks:(byDept[dep.id]||[]) }));
   if(me && !isAdmin) projectData = projectData.filter(s=> s.id === me.department_id);
   if(r && r.data && r.data.value) race = r.data.value;
+  await loadMeetings();
+}
+async function loadMeetings(){
+  const [m, mp] = await Promise.all([
+    sb.from('meetings').select('*').order('starts_at'),
+    sb.from('meeting_participants').select('meeting_id,user_id')
+  ]);
+  if(m.error){ console.error(m.error); meetings=[]; return; }   // table absente : migration-meetings.sql non appliquée
+  const byMeeting={}; (mp.data||[]).forEach(p=>{ (byMeeting[p.meeting_id] ||= []).push(p.user_id); });
+  meetings=(m.data||[]).map(x=>({ ...x, participants:byMeeting[x.id]||[] }));
 }
 
 /* ============================ STATS ============================ */
@@ -438,6 +455,13 @@ function renderPitWall(){
         </div>
       </div>
     </section>
+    ${(()=>{ const nm=nextMeeting(); if(!nm) return ''; const s=new Date(nm.starts_at), live=s.getTime()<=Date.now();
+      return `<div class="bg-panel border border-line rounded-2xl p-4 mb-6 flex flex-wrap items-center gap-3 cursor-pointer hover:bg-panel2/50" onclick="switchView('meetings')">
+        <span class="text-info">${icon('calendar')}</span>
+        <div class="flex-1 min-w-0"><div class="text-xs text-mute">${live?'Réunion en cours':'Prochaine réunion'}</div>
+          <div class="text-sm text-ink truncate"><b>${esc(nm.title)}</b> · <span class="capitalize">${esc(fmtDay(s))}</span> à ${fmtTime(s)}${nm.location?' · '+esc(nm.location):''}</div></div>
+        ${live?'<span class="badge bg-go/15 text-go border-go/40">En cours</span>':''}
+      </div>`; })()}
     <div class="bg-panel border border-line rounded-2xl p-5">
       <div class="flex items-center gap-2 mb-2"><h3 class="font-display font-bold text-white text-sm">Alertes pit-wall</h3><span class="badge ${alerts.length?'bg-rosso/15 text-rosso border-rosso/40':'bg-go/15 text-go border-go/40'}">${alerts.length}</span></div>
       <p class="text-xs text-mute mb-3">Interventions critiques non terminées ou en retard sur l’échéance.</p>
@@ -568,6 +592,151 @@ function renderGantt(){
     </div>`;
 }
 
+/* ============================ VUE : RÉUNIONS ============================ */
+const fmtDay  = d => d.toLocaleDateString('fr-FR',{ weekday:'long', day:'numeric', month:'long' });
+const fmtTime = d => d.toLocaleTimeString('fr-FR',{ hour:'2-digit', minute:'2-digit' });
+function toLocalInput(d){ const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
+function userName(id){ const u=users.find(x=>x.id===id); return u?(u.full_name||u.email):'Participant'; }
+function meetingScope(m){ return m.department_id ? (deptName(m.department_id)||'Autre département') : 'Toutes équipes'; }
+function nextMeeting(){ const now=Date.now(); return meetings.find(m=> new Date(m.ends_at).getTime()>=now) || null; }
+
+function meetingCard(m){
+  const s=new Date(m.starts_at), e=new Date(m.ends_at), now=Date.now();
+  const live=s.getTime()<=now && now<e.getTime(), past=e.getTime()<now;
+  const invited=me && m.participants.includes(me.id);
+  const link=safeUrl(m.link);
+  return `
+    <div class="list-row items-start ${past?'opacity-60':''}">
+      <div class="shrink-0 w-24 font-display tnum text-sm text-ink pt-0.5">${fmtTime(s)}<span class="text-mute"> → ${fmtTime(e)}</span></div>
+      <div class="flex-1 min-w-0">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-sm font-semibold text-ink">${esc(m.title)}</span>
+          <span class="badge bg-panel2 text-mute border-line">${esc(meetingScope(m))}</span>
+          ${live?'<span class="badge bg-go/15 text-go border-go/40">En cours</span>':''}
+          ${invited?'<span class="badge bg-info/15 text-info border-info/40">Invité</span>':''}
+        </div>
+        <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-mute mt-1">
+          ${m.location?`<span class="flex items-center gap-1">${icon('map-pin')} ${esc(m.location)}</span>`:''}
+          ${link?`<a href="${esc(link)}" target="_blank" rel="noopener noreferrer" class="text-info hover:underline flex items-center gap-1">${icon('video')} Rejoindre</a>`:''}
+          ${m.participants.length?`<span class="flex items-center gap-1">${icon('users')} ${m.participants.map(id=>esc(userName(id))).join(', ')}</span>`:''}
+        </div>
+        ${m.description?`<div class="text-xs text-ink/80 whitespace-pre-wrap mt-1.5">${esc(m.description)}</div>`:''}
+      </div>
+      ${isAdmin?`<div class="shrink-0 flex gap-1">
+        <button class="iconbtn" onclick="editMeeting(${m.id})" title="Modifier" aria-label="Modifier">${icon('pencil')}</button>
+        <button class="iconbtn danger" onclick="deleteMeeting(${m.id})" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
+      </div>`:''}
+    </div>`;
+}
+function meetingGroups(list){
+  const groups=[]; let key=null;
+  list.forEach(m=>{ const d=new Date(m.starts_at), k=d.toDateString(); if(k!==key){ key=k; groups.push({ day:d, items:[] }); } groups[groups.length-1].items.push(m); });
+  return groups.map(g=>`
+    <div class="mb-4"><div class="text-xs font-display font-bold text-ink mb-2 capitalize">${esc(fmtDay(g.day))}</div>
+    <div class="space-y-2">${g.items.map(meetingCard).join('')}</div></div>`).join('');
+}
+function renderMeetingList(){
+  const el=document.getElementById('meeting-list'); if(!el) return;
+  const now=Date.now();
+  const upcoming=meetings.filter(m=> new Date(m.ends_at).getTime()>=now);
+  const past=meetings.filter(m=> new Date(m.ends_at).getTime()<now).reverse();
+  el.innerHTML=`
+    <div class="bg-panel border border-line rounded-2xl p-5">
+      <div class="flex items-center gap-2 mb-4"><h3 class="font-display font-bold text-white text-sm">Réunions à venir</h3><span class="badge bg-panel2 text-mute border-line">${upcoming.length}</span></div>
+      ${upcoming.length?meetingGroups(upcoming):`<p class="text-sm text-mute py-4 text-center">Aucune réunion planifiée.</p>`}
+      ${past.length?`<button class="btn btn-ghost mt-2" onclick="showPastMeetings=!showPastMeetings; renderMeetingList()">${showPastMeetings?'Masquer':'Afficher'} les réunions passées (${past.length})</button>
+        ${showPastMeetings?`<div class="mt-4">${meetingGroups(past)}</div>`:''}`:''}
+    </div>`;
+  hydrateIcons();
+}
+function renderMeetings(){
+  const form=isAdmin?`
+    <div class="bg-panel border border-line rounded-2xl overflow-hidden mb-5">
+      <div class="bg-panel2 border-b border-line px-5 py-3.5"><h2 id="meeting-form-title" class="font-display font-bold text-white text-sm flex items-center gap-2">${icon('calendar')} Planifier une réunion</h2></div>
+      <form id="meeting-form" onsubmit="saveMeeting(event)" class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input type="hidden" id="m-edit-id">
+        <div class="md:col-span-2"><label class="block text-xs text-mute mb-1">Objet</label><input id="m-title" class="in" placeholder="Ex : Briefing pré-course" required></div>
+        <div><label class="block text-xs text-mute mb-1">Concerne</label><select id="m-dept" class="in"><option value="">Toutes équipes</option>${projectData.map(d=>`<option value="${d.id}">${esc(d.rubrique)}</option>`).join('')}</select></div>
+        <div><label class="block text-xs text-mute mb-1">Début</label><input id="m-start" type="datetime-local" class="in" required></div>
+        <div><label class="block text-xs text-mute mb-1">Fin</label><input id="m-end" type="datetime-local" class="in" required></div>
+        <div><label class="block text-xs text-mute mb-1">Lieu</label><input id="m-location" class="in" placeholder="Ex : Motorhome, salle briefing"></div>
+        <div class="md:col-span-3"><label class="block text-xs text-mute mb-1">Lien visio (optionnel)</label><input id="m-link" type="url" class="in" placeholder="https://teams.microsoft.com/…"></div>
+        <div class="md:col-span-3"><label class="block text-xs text-mute mb-1">Participants</label>
+          <div id="m-participants" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-40 overflow-y-auto">${users.length?users.map(u=>`
+            <label class="flex items-center gap-2 text-sm text-ink"><input type="checkbox" value="${esc(u.id)}" class="accent-go w-4 h-4"> ${esc(userLabel(u))}</label>`).join(''):'<span class="text-xs text-mute">Aucun utilisateur.</span>'}</div></div>
+        <div class="md:col-span-3"><label class="block text-xs text-mute mb-1">Ordre du jour (optionnel)</label><textarea id="m-desc" rows="3" class="in" placeholder="Points à aborder…"></textarea></div>
+        <div class="md:col-span-3 flex justify-end gap-3">
+          <button type="button" id="m-cancel" onclick="resetMeetingForm()" class="btn hidden">Annuler</button>
+          <button type="submit" id="m-submit" class="btn btn-primary">+ Planifier</button>
+        </div>
+      </form>
+    </div>`:'';
+  document.getElementById('view').innerHTML=form+'<div id="meeting-list"></div>';
+  if(isAdmin) resetMeetingForm();
+  renderMeetingList();
+}
+function resetMeetingForm(){
+  const f=document.getElementById('meeting-form'); if(!f) return;
+  f.reset(); document.getElementById('m-edit-id').value='';
+  const s=new Date(); s.setMinutes(0,0,0); s.setHours(s.getHours()+1);
+  document.getElementById('m-start').value=toLocalInput(s);
+  document.getElementById('m-end').value=toLocalInput(new Date(s.getTime()+3600000));
+  document.getElementById('meeting-form-title').innerHTML=icon('calendar')+' Planifier une réunion';
+  document.getElementById('m-submit').innerText='+ Planifier';
+  document.getElementById('m-cancel').classList.add('hidden');
+}
+function editMeeting(id){
+  if(!isAdmin) return;
+  const m=meetings.find(x=>x.id===id); if(!m) return;
+  document.getElementById('m-edit-id').value=id;
+  document.getElementById('m-title').value=m.title;
+  document.getElementById('m-dept').value=m.department_id||'';
+  document.getElementById('m-start').value=toLocalInput(new Date(m.starts_at));
+  document.getElementById('m-end').value=toLocalInput(new Date(m.ends_at));
+  document.getElementById('m-location').value=m.location||'';
+  document.getElementById('m-link').value=m.link||'';
+  document.getElementById('m-desc').value=m.description||'';
+  document.querySelectorAll('#m-participants input[type=checkbox]').forEach(c=>{ c.checked=m.participants.includes(c.value); });
+  document.getElementById('meeting-form-title').innerHTML=icon('pencil')+' Modifier la réunion';
+  document.getElementById('m-submit').innerText='Enregistrer les modifications';
+  document.getElementById('m-cancel').classList.remove('hidden');
+  document.getElementById('meeting-form').scrollIntoView({ behavior:REDUCE?'auto':'smooth', block:'start' });
+}
+async function saveMeeting(e){
+  e.preventDefault();
+  if(!isAdmin) return;
+  const start=new Date(document.getElementById('m-start').value), end=new Date(document.getElementById('m-end').value);
+  if(isNaN(start)||isNaN(end)){ alert("Dates invalides."); return; }
+  if(end<=start){ alert("La fin doit être après le début."); return; }
+  const rawLink=document.getElementById('m-link').value.trim();
+  if(rawLink && !safeUrl(rawLink)){ alert("Le lien visio doit commencer par http:// ou https://."); return; }
+  const dept=document.getElementById('m-dept').value;
+  const payload={ title:document.getElementById('m-title').value.trim(), starts_at:start.toISOString(), ends_at:end.toISOString(),
+    location:document.getElementById('m-location').value.trim()||null, link:safeUrl(rawLink),
+    description:document.getElementById('m-desc').value.trim()||null, department_id:dept===''?null:Number(dept) };
+  const participants=[...document.querySelectorAll('#m-participants input[type=checkbox]:checked')].map(c=>c.value);
+  const editId=document.getElementById('m-edit-id').value;
+  const btn=document.getElementById('m-submit'); btn.disabled=true;
+  try{
+    let id=Number(editId);
+    if(editId){ const { error }=await sb.from('meetings').update(payload).eq('id',id); if(error) throw error; }
+    else{ const { data, error }=await sb.from('meetings').insert(payload).select('id').single(); if(error) throw error; id=data.id; }
+    const del=await sb.from('meeting_participants').delete().eq('meeting_id',id); if(del.error) throw del.error;
+    if(participants.length){ const ins=await sb.from('meeting_participants').insert(participants.map(user_id=>({ meeting_id:id, user_id }))); if(ins.error) throw ins.error; }
+    resetMeetingForm(); await loadMeetings(); renderMeetingList();
+  }catch(err){ alert('Erreur : '+err.message); }
+  finally{ btn.disabled=false; }
+}
+async function deleteMeeting(id){
+  if(!isAdmin) return;
+  const m=meetings.find(x=>x.id===id); if(!m) return;
+  if(!confirm(`Supprimer la réunion « ${m.title} » ?`)) return;
+  const { error }=await sb.from('meetings').delete().eq('id',id);
+  if(error){ alert('Erreur : '+error.message); return; }
+  if(document.getElementById('m-edit-id')?.value==String(id)) resetMeetingForm();
+  await loadMeetings(); renderMeetingList();
+}
+
 /* ============================ VUE : PANNEAU INGÉNIEUR ============================ */
 function renderAdminPanel(){
   document.getElementById('view').innerHTML=`
@@ -692,21 +861,22 @@ function emptyState(msg){ return `<div class="bg-panel border border-line rounde
 
 /* ============================ ROUTAGE ============================ */
 function renderView(){
-  if(me && !isAdmin && !me.department_id){ document.getElementById('view').innerHTML=emptyState("Aucun département ne t'a été attribué. Un ingénieur doit te rattacher à un département pour que les tâches s'affichent."); return; }
+  if(me && !isAdmin && !me.department_id && currentView!=='meetings'){ document.getElementById('view').innerHTML=emptyState("Aucun département ne t'a été attribué. Un ingénieur doit te rattacher à un département pour que les tâches s'affichent."); return; }
   if(currentView==='pitwall') renderPitWall();
   else if(currentView==='board') renderBoard();
   else if(currentView==='table') renderTable();
   else if(currentView==='gantt') renderGantt();
+  else if(currentView==='meetings') renderMeetings();
   else if(currentView==='admin') renderAdminPanel();
 }
 function switchView(v){
   if(v==='admin' && !isAdmin) return;
   currentView=v;
-  ['pitwall','board','table','gantt','admin'].forEach(k=>{
+  ['pitwall','board','table','gantt','meetings','admin'].forEach(k=>{
     const btn=document.getElementById('tab-'+k);
     if(btn) btn.setAttribute('aria-selected',k===v);
   });
-  document.getElementById('controls').classList.toggle('hidden', v==='board' || v==='pitwall' || v==='admin');
+  document.getElementById('controls').classList.toggle('hidden', v==='board' || v==='pitwall' || v==='meetings' || v==='admin');
   renderView();
   const vw=document.getElementById('view'); vw.classList.remove('fade-up'); void vw.offsetWidth; vw.classList.add('fade-up');
 }
@@ -715,7 +885,8 @@ function renderAll(){
   if(tabAdmin) tabAdmin.classList.toggle('hidden', !isAdmin);
   // Panneau ingénieur déjà affiché : on ne reconstruit pas la page (sinon le formulaire en cours de saisie est effacé),
   // on rafraîchit seulement ses sous-parties ci-dessous.
-  if(!(currentView==='admin' && isAdmin && document.getElementById('task-form'))) renderView();
+  if(currentView==='meetings' && document.getElementById('meeting-list')) renderMeetingList();   // idem : garde le formulaire réunion
+  else if(!(currentView==='admin' && isAdmin && document.getElementById('task-form'))) renderView();
   populateDeptControls(); populateAssigneeOptions(); renderDeptManager(); renderUsers();
 }
 function populateDeptControls(){
@@ -1038,6 +1209,8 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'subtasks'}, reload)
     .on('postgres_changes',{event:'*',schema:'public',table:'departments'}, reload)
     .on('postgres_changes',{event:'*',schema:'public',table:'settings'}, reload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'meetings'}, reload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'meeting_participants'}, reload)
     .subscribe();
 }
 
