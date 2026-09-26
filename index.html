@@ -342,6 +342,7 @@ async function loadMeetings(){
   if(m.error){ console.error(m.error); meetings=[]; return; }   // table absente : migration-meetings.sql non appliquée
   const byMeeting={}; (mp.data||[]).forEach(p=>{ (byMeeting[p.meeting_id] ||= []).push(p.user_id); });
   meetings=(m.data||[]).map(x=>({ ...x, participants:byMeeting[x.id]||[] }));
+  if(!isAdmin) meetings=meetings.filter(x=> me && x.participants.includes(me.id));   // doublon de la RLS : seuls les invités voient
 }
 
 /* ============================ STATS ============================ */
@@ -656,12 +657,14 @@ function renderMeetings(){
       <form id="meeting-form" onsubmit="saveMeeting(event)" class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
         <input type="hidden" id="m-edit-id">
         <div class="md:col-span-2"><label class="block text-xs text-mute mb-1">Objet</label><input id="m-title" class="in" placeholder="Ex : Briefing pré-course" required></div>
-        <div><label class="block text-xs text-mute mb-1">Concerne</label><select id="m-dept" class="in"><option value="">Toutes équipes</option>${projectData.map(d=>`<option value="${d.id}">${esc(d.rubrique)}</option>`).join('')}</select></div>
+        <div><label class="block text-xs text-mute mb-1">Département concerné <span class="text-mute/70">(coche ses membres)</span></label><select id="m-dept" class="in" onchange="inviteDept(this.value)"><option value="">Toutes équipes</option>${projectData.map(d=>`<option value="${d.id}">${esc(d.rubrique)}</option>`).join('')}</select></div>
         <div><label class="block text-xs text-mute mb-1">Début</label><input id="m-start" type="datetime-local" class="in" required></div>
         <div><label class="block text-xs text-mute mb-1">Fin</label><input id="m-end" type="datetime-local" class="in" required></div>
         <div><label class="block text-xs text-mute mb-1">Lieu</label><input id="m-location" class="in" placeholder="Ex : Motorhome, salle briefing"></div>
         <div class="md:col-span-3"><label class="block text-xs text-mute mb-1">Lien visio (optionnel)</label><input id="m-link" type="url" class="in" placeholder="https://teams.microsoft.com/…"></div>
-        <div class="md:col-span-3"><label class="block text-xs text-mute mb-1">Participants</label>
+        <div class="md:col-span-3"><div class="flex items-center gap-3 mb-1"><label class="text-xs text-mute">Participants <span class="text-mute/70">— seuls les invités verront la réunion</span></label>
+          <button type="button" class="text-xs text-info hover:underline" onclick="setAllParticipants(true)">Tout cocher</button>
+          <button type="button" class="text-xs text-info hover:underline" onclick="setAllParticipants(false)">Tout décocher</button></div>
           <div id="m-participants" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 max-h-40 overflow-y-auto">${users.length?users.map(u=>`
             <label class="flex items-center gap-2 text-sm text-ink"><input type="checkbox" value="${esc(u.id)}" class="accent-go w-4 h-4"> ${esc(userLabel(u))}</label>`).join(''):'<span class="text-xs text-mute">Aucun utilisateur.</span>'}</div></div>
         <div class="md:col-span-3"><label class="block text-xs text-mute mb-1">Ordre du jour (optionnel)</label><textarea id="m-desc" rows="3" class="in" placeholder="Points à aborder…"></textarea></div>
@@ -674,6 +677,12 @@ function renderMeetings(){
   document.getElementById('view').innerHTML=form+'<div id="meeting-list"></div>';
   if(isAdmin) resetMeetingForm();
   renderMeetingList();
+}
+function setAllParticipants(on){ document.querySelectorAll('#m-participants input[type=checkbox]').forEach(c=>{ c.checked=on; }); }
+function inviteDept(value){
+  if(value==='') return;
+  const id=Number(value);
+  document.querySelectorAll('#m-participants input[type=checkbox]').forEach(c=>{ const u=users.find(x=>x.id===c.value); if(u && u.department_id===id) c.checked=true; });
 }
 function resetMeetingForm(){
   const f=document.getElementById('meeting-form'); if(!f) return;
@@ -715,6 +724,7 @@ async function saveMeeting(e){
     location:document.getElementById('m-location').value.trim()||null, link:safeUrl(rawLink),
     description:document.getElementById('m-desc').value.trim()||null, department_id:dept===''?null:Number(dept) };
   const participants=[...document.querySelectorAll('#m-participants input[type=checkbox]:checked')].map(c=>c.value);
+  if(!participants.length && !confirm("Aucun participant coché : seuls les ingénieurs verront cette réunion. Continuer ?")) return;
   const editId=document.getElementById('m-edit-id').value;
   const btn=document.getElementById('m-submit'); btn.disabled=true;
   try{
