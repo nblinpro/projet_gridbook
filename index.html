@@ -117,7 +117,37 @@
   .chip{ display:inline-flex; align-items:center; gap:5px; font-size:11px; color:#8B98A8; background:#0d1117; border:1px solid #2A333F; border-radius:999px; padding:3px 8px; flex:none; }
   .avatar{ width:34px; height:34px; border-radius:9999px; display:flex; align-items:center; justify-content:center; font-family:'Oxanium',sans-serif; font-weight:700; font-size:13px; color:#E6EDF3; background:linear-gradient(180deg,#232C38,#1a212b); border:1px solid #2A333F; flex:none; }
 
-  @media (max-width:640px){ :root{ --label-w:120px; } .cd-n{ font-size:30px; } }
+  /* Gantt interactif */
+  .g-drag{ cursor:grab; touch-action:none; user-select:none; }
+  .g-drag.dragging{ cursor:grabbing; box-shadow:0 0 0 2px #E6EDF3; z-index:5; }
+  .g-h{ position:absolute; top:0; bottom:0; width:7px; cursor:ew-resize; z-index:2; }
+  .g-hl{ left:0; } .g-hr{ right:0; }
+  .g-conflict{ outline:2px dashed #E10600; outline-offset:1px; }
+  .zoom-btn{ font-size:11px; padding:4px 10px; border-radius:7px; color:#8B98A8; border:1px solid transparent; }
+  .zoom-btn[aria-pressed="true"]{ background:#232C38; color:#E6EDF3; border-color:#2A333F; }
+
+  /* Calendrier */
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:1px; background:#2A333F; border:1px solid #2A333F; border-radius:12px; overflow:hidden; }
+  .cal-head{ background:#232C38; font-size:11px; color:#8B98A8; padding:6px 8px; text-align:center; font-weight:600; }
+  .cal-cell{ background:#1C232D; min-height:104px; padding:6px; display:flex; flex-direction:column; gap:3px; }
+  .cal-cell.out{ background:#161c24; }
+  .cal-cell.out .cal-day{ color:#4b5664; }
+  .cal-day{ font-size:11px; font-weight:700; color:#8B98A8; font-family:'Oxanium',sans-serif; }
+  .cal-cell.today .cal-day{ color:#fff; background:#4C86E0; border-radius:999px; padding:0 6px; align-self:flex-start; }
+  .cal-item{ font-size:10.5px; line-height:1.25; padding:2px 5px; border-radius:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; border-left:3px solid transparent; background:#232C38; color:#E6EDF3; }
+  .cal-item:hover{ filter:brightness(1.2); }
+
+  /* Notifications */
+  .notif-panel{ position:absolute; right:0; top:calc(100% + 8px); width:340px; max-width:calc(100vw - 32px); max-height:70vh; overflow-y:auto; background:#141920; border:1px solid #2A333F; border-radius:14px; box-shadow:0 12px 32px rgba(0,0,0,.5); z-index:60; }
+  .notif-dot{ position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; padding:0 4px; border-radius:999px; background:#E10600; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+
+  .rsvp-btn{ font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; border:1px solid #2A333F; color:#8B98A8; }
+  .rsvp-btn:hover{ color:#E6EDF3; }
+  .rsvp-btn.on-present{ background:rgba(46,212,122,.15); color:#2ED47A; border-color:rgba(46,212,122,.5); }
+  .rsvp-btn.on-maybe{ background:rgba(245,166,35,.15); color:#F5A623; border-color:rgba(245,166,35,.5); }
+  .rsvp-btn.on-absent{ background:rgba(225,6,0,.15); color:#ff5a52; border-color:rgba(225,6,0,.5); }
+
+  @media (max-width:640px){ :root{ --label-w:120px; } .cd-n{ font-size:30px; } .cal-cell{ min-height:72px; } }
   @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
 </style>
 </head>
@@ -132,7 +162,7 @@
         <p class="text-xs text-mute truncate">Carnet de bord partagé — moteur, châssis, télémétrie, stratégie</p>
       </div>
     </div>
-    <div id="user-area" class="hidden items-center gap-3 shrink-0"></div>
+    <div id="user-area" class="hidden flex items-center gap-3 shrink-0 relative"></div>
   </div>
   <div class="checkers h-1.5 w-full" aria-hidden="true"></div>
 </header>
@@ -169,6 +199,23 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
         <p id="login-error" class="hidden text-xs text-rosso"></p>
         <button id="login-btn" type="submit" class="btn btn-primary w-full">Se connecter</button>
       </form>
+      <button type="button" onclick="forgotPassword()" class="mt-3 text-xs text-info hover:underline">Mot de passe oublié ?</button>
+      <p id="forgot-msg" class="hidden mt-2 text-xs"></p>
+    </div>
+  </div>
+
+  <!-- ÉCRAN : nouveau mot de passe (lien reçu par e-mail) -->
+  <div id="reset-screen" class="hidden screen">
+    <div class="card">
+      <div class="font-display font-extrabold text-white bg-rosso rounded-lg px-2.5 py-1.5 text-sm tracking-wide inline-block mb-4">PIT&nbsp;WALL</div>
+      <h2 class="font-display font-bold text-white text-lg mb-1">Nouveau mot de passe</h2>
+      <p class="text-sm text-mute mb-5">Choisis un nouveau mot de passe pour ton compte.</p>
+      <form onsubmit="doResetPassword(event)" class="space-y-3">
+        <div><label class="block text-xs text-mute mb-1">Nouveau mot de passe</label><input id="reset-pass" type="password" class="in" minlength="8" autocomplete="new-password" required></div>
+        <div><label class="block text-xs text-mute mb-1">Confirmation</label><input id="reset-pass2" type="password" class="in" minlength="8" autocomplete="new-password" required></div>
+        <p id="reset-error" class="hidden text-xs text-rosso"></p>
+        <button id="reset-btn" type="submit" class="btn btn-primary w-full">Enregistrer</button>
+      </form>
     </div>
   </div>
 
@@ -199,11 +246,13 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
     <!-- Onglets + contrôles -->
     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
       <div role="tablist" class="flex gap-2 overflow-x-auto pb-1">
+        <button role="tab" id="tab-mine"    aria-selected="false" class="tab" onclick="switchView('mine')"><i data-ic="user"></i> Mes tâches</button>
         <button role="tab" id="tab-pitwall" aria-selected="true"  class="tab" onclick="switchView('pitwall')"><i data-ic="flag"></i> Pit Wall</button>
         <button role="tab" id="tab-board"   aria-selected="false" class="tab" onclick="switchView('board')"><i data-ic="layout-dashboard"></i> Tableau de bord</button>
         <button role="tab" id="tab-table"   aria-selected="false" class="tab" onclick="switchView('table')"><i data-ic="list-checks"></i> Interventions</button>
         <button role="tab" id="tab-gantt"   aria-selected="false" class="tab" onclick="switchView('gantt')"><i data-ic="gantt"></i> Gantt</button>
-        <button role="tab" id="tab-meetings" aria-selected="false" class="tab" onclick="switchView('meetings')"><i data-ic="calendar"></i> Réunions</button>
+        <button role="tab" id="tab-calendar" aria-selected="false" class="tab" onclick="switchView('calendar')"><i data-ic="calendar"></i> Calendrier</button>
+        <button role="tab" id="tab-meetings" aria-selected="false" class="tab" onclick="switchView('meetings')"><i data-ic="users"></i> Réunions</button>
         <button role="tab" id="tab-admin"   aria-selected="false" class="tab hidden" onclick="switchView('admin')"><i data-ic="settings"></i> Panneau ingénieur — ajouter une tâche</button>
       </div>
       <div id="controls" class="hidden flex-wrap items-center gap-2">
@@ -237,6 +286,8 @@ const SUPABASE_URL      = "https://sgilfrenddcogafvwfpz.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bybFfJUYoEhg97fDL3F34w_2oTvZ41s";
 
 const CONFIGURED = !/xxxx\.supabase\.co|remplace-moi/.test(SUPABASE_URL + SUPABASE_ANON_KEY);
+// Lien « mot de passe oublié » : à lire AVANT la création du client, qui nettoie l'URL.
+const RECOVERY = /type=recovery/.test(location.hash + location.search);
 let sb = null;
 if (CONFIGURED && window.supabase) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -247,6 +298,14 @@ let me = null, isAdmin = false;
 let users = [];
 let meetings = [];
 let allDeptNames = {};
+let deps = [];            // { task_id, depends_on_id } : task_id ne commence qu'après la fin de depends_on_id
+let meetingTasks = [];    // { meeting_id, task_id }
+let notifications = [];
+let notifOpen = false;
+let historyCache = {};    // task_id -> entrées d'historique
+let minutesOpen = new Set();
+let ganttZoom = 'auto';   // auto | week | month
+let calMonth = null;      // 1er jour du mois affiché dans le calendrier
 let showPastMeetings = false;
 let expanded = new Set();
 let currentView = 'pitwall';
@@ -261,6 +320,25 @@ function deptName(id){ const d=projectData.find(x=>x.id===id); return d?d.rubriq
 function userLabel(u){ const dn=deptName(u.department_id); return (u.full_name||u.email||'—')+(dn?` — ${dn}`:''); }
 function assigneeLabel(t){ if(t.assignee_id){ const u=users.find(x=>x.id===t.assignee_id); return u?(u.full_name||u.email):'Assigné'; } return t.assignee||'Non assigné'; }
 function assigneeName(t){ return (t.assignee_id||t.assignee) ? assigneeLabel(t) : ''; }
+function allTasks(){ const out=[]; projectData.forEach(s=> s.tasks.forEach(t=> out.push(t))); return out; }
+function taskById(id){ for(const s of projectData){ const t=s.tasks.find(x=>x.id===id); if(t) return t; } return null; }
+function taskDeptName(t){ return allDeptNames[t.department_id]||''; }
+/* Ingénieur : toutes les tâches. Contributeur : statut, avancement et sous-tâches des tâches qui lui sont assignées. */
+function canEditTask(t){ return !!(t && me && (isAdmin || (me.role==='contributeur' && t.assignee_id===me.id))); }
+const depsOf     = id => deps.filter(d=>d.task_id===id).map(d=>d.depends_on_id);
+const blockedBy  = id => deps.filter(d=>d.depends_on_id===id).map(d=>d.task_id);
+/* Problèmes de dépendance d'une tâche : liste de messages lisibles. */
+function depIssues(t){
+  const out=[];
+  depsOf(t.id).forEach(did=>{
+    const a=taskById(did); if(!a) return;
+    if(t.start && a.end && pDate(t.start) < pDate(a.end)) out.push(`commence avant la fin de « ${a.name} »`);
+    else if(!isDone(a) && t.status!=='À planifier') out.push(`« ${a.name} » n'est pas terminée`);
+  });
+  return out;
+}
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const addDays = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
 /* N'accepte que les liens http(s) : bloque javascript:, data:, etc. */
 function safeUrl(s){ if(!s) return null; try{ const u=new URL(String(s).trim()); return (u.protocol==='http:'||u.protocol==='https:') ? u.href : null; }catch(_){ return null; } }
 
@@ -281,6 +359,11 @@ const ICONS={
 'chevron-up':'<path d="m18 15-6-6-6 6"/>',
 'chevron-down':'<path d="m6 9 6 6 6-6"/>',
 'chevron-right':'<path d="m9 18 6-6-6-6"/>',
+'chevron-left':'<path d="m15 18-6-6 6-6"/>',
+'bell':'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+'history':'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+'alert':'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+'plus':'<path d="M5 12h14"/><path d="M12 5v14"/>',
 'wrench':'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
 'lock':'<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
 'lock-open':'<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
@@ -334,17 +417,34 @@ async function loadData(){
   allDeptNames = Object.fromEntries((d.data||[]).map(dep=>[dep.id, dep.name]));   // avant filtrage : sert aux libellés (réunions)
   if(me && !isAdmin) projectData = projectData.filter(s=> s.id === me.department_id);
   if(r && r.data && r.data.value) race = r.data.value;
+  // Tables optionnelles : si une migration n'est pas encore appliquée, la fonctionnalité reste simplement vide.
+  const dp=await sb.from('task_dependencies').select('task_id,depends_on_id');
+  deps = dp.error ? [] : (dp.data||[]);
   await loadMeetings();
 }
 async function loadMeetings(){
-  const [m, mp] = await Promise.all([
+  let [m, mp, mt] = await Promise.all([
     sb.from('meetings').select('*').order('starts_at'),
-    sb.from('meeting_participants').select('meeting_id,user_id')
+    sb.from('meeting_participants').select('meeting_id,user_id,response'),
+    sb.from('meeting_tasks').select('meeting_id,task_id')
   ]);
-  if(m.error){ console.error(m.error); meetings=[]; return; }   // table absente : migration-meetings.sql non appliquée
-  const byMeeting={}; (mp.data||[]).forEach(p=>{ (byMeeting[p.meeting_id] ||= []).push(p.user_id); });
-  meetings=(m.data||[]).map(x=>({ ...x, participants:byMeeting[x.id]||[] }));
+  if(m.error){ console.error(m.error); meetings=[]; meetingTasks=[]; return; }   // table absente : migration-meetings.sql non appliquée
+  if(mp.error) mp=await sb.from('meeting_participants').select('meeting_id,user_id');   // migration-meetings-v2 non appliquée
+  meetingTasks = mt.error ? [] : (mt.data||[]);
+  const byMeeting={}, resp={};
+  (mp.data||[]).forEach(p=>{ (byMeeting[p.meeting_id] ||= []).push(p.user_id); (resp[p.meeting_id] ||= {})[p.user_id]=p.response||null; });
+  meetings=(m.data||[]).map(x=>({ ...x, participants:byMeeting[x.id]||[], responses:resp[x.id]||{}, tasks:meetingTasks.filter(l=>l.meeting_id===x.id).map(l=>l.task_id) }));
   if(!isAdmin) meetings=meetings.filter(x=> me && x.participants.includes(me.id));   // doublon de la RLS : seuls les invités voient
+}
+async function loadNotifications(){
+  const { data, error }=await sb.from('notifications').select('*').order('created_at',{ ascending:false }).limit(30);
+  notifications = error ? [] : (data||[]);
+}
+async function loadHistory(ids){
+  ids=[...ids].filter(Boolean); if(!ids.length) return;
+  const { data, error }=await sb.from('task_history').select('*').in('task_id', ids).order('created_at',{ ascending:false }).limit(200);
+  if(error){ ids.forEach(id=>{ historyCache[id]=null; }); return; }   // migration-task-history non appliquée
+  ids.forEach(id=>{ historyCache[id]=(data||[]).filter(h=>h.task_id===id); });
 }
 
 /* ============================ STATS ============================ */
@@ -423,13 +523,13 @@ function setFilter(k,v){ filters[k]=v; if(currentView!=='board' && currentView!=
 /* ============================ VUE : PIT WALL ============================ */
 function renderPitWall(){
   const s=stats();
-  let alerts=[]; projectData.forEach(sec=> sec.tasks.forEach(t=>{ const late=isLate(t),crit=(t.priority==='Critique'&&!isDone(t)); if(late||crit) alerts.push({t,late,crit}); }));
-  alerts.sort((a,b)=>(b.late+b.crit)-(a.late+a.crit)||pWeight(b.t.priority)-pWeight(a.t.priority));
-  
+  let alerts=[]; projectData.forEach(sec=> sec.tasks.forEach(t=>{ const late=isLate(t),crit=(t.priority==='Critique'&&!isDone(t)),dep=!isDone(t)?depIssues(t):[]; if(late||crit||dep.length) alerts.push({t,late,crit,dep}); }));
+  alerts.sort((a,b)=>(b.late+b.crit+(b.dep.length>0))-(a.late+a.crit+(a.dep.length>0))||pWeight(b.t.priority)-pWeight(a.t.priority));
+
   const alertItems=alerts.length?alerts.map(a=>`
-    <div class="flex items-center justify-between gap-3 py-2.5 border-b border-line last:border-0 ${isAdmin?'cursor-pointer hover:bg-panel2/50 px-2 -mx-2 rounded-lg':''}" ${isAdmin?`onclick="editTask(${a.t.id})"`:''}>
-      <div class="min-w-0"><div class="text-sm text-ink truncate">${esc(a.t.name)}</div><div class="text-xs text-mute truncate">${esc(assigneeLabel(a.t))} · échéance ${fmtDM(a.t.end)}</div></div>
-      <div class="flex items-center gap-1.5 shrink-0">${a.crit?'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Bloquant</span>':''}${a.late?'<span class="badge bg-amber/15 text-amber border-amber/40">En retard</span>':''}</div>
+    <div class="flex items-center justify-between gap-3 py-2.5 border-b border-line last:border-0 cursor-pointer hover:bg-panel2/50 px-2 -mx-2 rounded-lg" onclick="${isAdmin?`editTask(${a.t.id})`:`openTask(${a.t.id})`}">
+      <div class="min-w-0"><div class="text-sm text-ink truncate">${esc(a.t.name)}</div><div class="text-xs text-mute truncate">${esc(assigneeLabel(a.t))} · échéance ${fmtDM(a.t.end)}${a.dep.length?' · '+esc(a.dep[0]):''}</div></div>
+      <div class="flex items-center gap-1.5 shrink-0">${a.crit?'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Bloquant</span>':''}${a.late?'<span class="badge bg-amber/15 text-amber border-amber/40">En retard</span>':''}${a.dep.length?'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Dépendance</span>':''}</div>
     </div>`).join('') : `<div class="text-sm text-mute py-6 text-center flex items-center justify-center gap-2"><span class="text-go">${icon('check-circle')}</span> Aucun point bloquant. La voiture avance selon le plan.</div>`;
 
   document.getElementById('view').innerHTML=`
@@ -467,7 +567,7 @@ function renderPitWall(){
       </div>`; })()}
     <div class="bg-panel border border-line rounded-2xl p-5">
       <div class="flex items-center gap-2 mb-2"><h3 class="font-display font-bold text-white text-sm">Alertes pit-wall</h3><span class="badge ${alerts.length?'bg-rosso/15 text-rosso border-rosso/40':'bg-go/15 text-go border-go/40'}">${alerts.length}</span></div>
-      <p class="text-xs text-mute mb-3">Interventions critiques non terminées ou en retard sur l’échéance.</p>
+      <p class="text-xs text-mute mb-3">Interventions critiques non terminées, en retard sur l’échéance, ou dont une dépendance n’est pas tenue.</p>
       ${alertItems}
     </div>`;
   renderHero();
@@ -514,11 +614,12 @@ function renderTable(){
         </tr></thead>
         <tbody class="divide-y divide-line">${sec.tasks.map(t=>{
           const subs=t.subtasks||[]; const total=subs.length, done=subs.filter(s=>s.done).length; const open=expanded.has(t.id);
+          const issues=isDone(t)?[]:depIssues(t);
           const main=`
-          <tr class="${isLate(t)?'overdue-row':''}">
+          <tr id="task-row-${t.id}" class="${isLate(t)?'overdue-row':''}">
             <td class="py-3.5 px-5 font-semibold text-ink">
               <button onclick="toggleExpand(${t.id})" class="text-mute hover:text-ink mr-1" title="Détails" aria-label="Afficher les détails">${open?icon('chevron-down'):icon('chevron-right')}</button>
-              ${esc(t.name)} ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1">retard</span>':''}${t.link_open?`<span class="badge bg-amber/15 text-amber border-amber/40 ml-1">${icon('lock-open')} contrib.</span>`:''}${total?`<span class="badge bg-panel2 text-mute border-line ml-1">${icon('check-square')} ${done}/${total}</span>`:''}
+              ${esc(t.name)} ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1">retard</span>':''}${issues.length?`<span class="badge bg-rosso/15 text-rosso border-rosso/40 ml-1" title="${esc(issues.join(' · '))}">${icon('alert')} dépendance</span>`:''}${t.link_open?`<span class="badge bg-amber/15 text-amber border-amber/40 ml-1">${icon('lock-open')} contrib.</span>`:''}${total?`<span class="badge bg-panel2 text-mute border-line ml-1">${icon('check-square')} ${done}/${total}</span>`:''}
             </td>
             <td class="py-3.5 px-5 text-mute">${esc(assigneeLabel(t))}</td>
             <td class="py-3.5 px-5">${prioBadge(t.priority)}</td>
@@ -539,22 +640,25 @@ function renderTable(){
           const detail = open ? `
           <tr class="bg-track/40">
             <td colspan="7" class="px-5 py-4">
+              ${canEditTask(t)&&!isAdmin?`<div class="mb-4">${quickEditHTML(t)}</div>`:''}
               <div class="grid md:grid-cols-2 gap-5">
                 <div>
                   <div class="text-xs text-mute mb-1">Description</div>
                   <div class="text-sm text-ink whitespace-pre-wrap">${t.description?esc(t.description):'<span class="text-mute">Aucune description.</span>'}</div>
+                  ${taskLinksHTML(t)}
                 </div>
                 <div>
                   <div class="text-xs text-mute mb-1">Sous-tâches ${total?`(${done}/${total})`:''}</div>
                   <div class="space-y-1.5">${subs.length?subs.map(s=>`
                     <label class="flex items-center gap-2 text-sm">
-                      <input type="checkbox" ${s.done?'checked':''} ${isAdmin?'':'disabled'} onchange="toggleSubtask(${s.id}, this.checked)" class="accent-go w-4 h-4">
+                      <input type="checkbox" ${s.done?'checked':''} ${canEditTask(t)?'':'disabled'} onchange="toggleSubtask(${s.id}, this.checked)" class="accent-go w-4 h-4">
                       <span class="${s.done?'line-through text-mute':'text-ink'}">${esc(s.title)}</span>
                       ${isAdmin?`<button onclick="deleteSubtask(${s.id})" class="ml-auto text-rosso hover:bg-rosso/10 rounded px-1.5" title="Supprimer">${icon('x')}</button>`:''}
                     </label>`).join(''):'<span class="text-mute text-sm">Aucune sous-tâche.</span>'}</div>
                   ${isAdmin?`<div class="flex gap-2 mt-2"><input id="sub-input-${t.id}" class="in flex-1" placeholder="Nouvelle sous-tâche…" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtask(${t.id});}"><button class="btn" onclick="addSubtask(${t.id})">+ Ajouter</button></div>`:''}
                 </div>
               </div>
+              ${historyHTML(t.id)}
             </td>
           </tr>` : '';
           return main + detail;
@@ -563,7 +667,172 @@ function renderTable(){
     </div>`).join('');
 }
 
+/* ============================ TÂCHE : blocs partagés (détail, Mes tâches) ============================ */
+const STATUSES=['À planifier','En cours','Prêt / Validé'];
+function quickEditHTML(t){
+  return `<div class="flex flex-wrap items-center gap-2 bg-panel2/60 border border-line rounded-xl px-3 py-2">
+    <span class="text-xs text-mute">Mon avancement</span>
+    <select id="q-status-${t.id}" class="in w-auto !py-1.5">${STATUSES.map(s=>`<option${s===t.status?' selected':''}>${s}</option>`).join('')}</select>
+    <input id="q-progress-${t.id}" type="range" min="0" max="100" value="${t.progress}" class="w-32 accent-go" oninput="document.getElementById('q-pv-${t.id}').innerText=this.value+'%'">
+    <span id="q-pv-${t.id}" class="font-display tnum text-xs text-ink w-9">${t.progress}%</span>
+    <button class="btn !py-1.5" onclick="saveQuick(${t.id})">Enregistrer</button>
+  </div>`;
+}
+function taskChip(id){
+  const t=taskById(id);
+  return t ? `<button class="chip hover:text-ink" onclick="openTask(${id})">${esc(t.name)}</button>` : `<span class="chip">Tâche d’un autre pôle</span>`;
+}
+function taskLinksHTML(t){
+  const d=depsOf(t.id), b=blockedBy(t.id), issues=isDone(t)?[]:depIssues(t);
+  const mtg=meetings.filter(m=>m.tasks.includes(t.id));
+  if(!d.length && !b.length && !mtg.length) return '';
+  return `<div class="mt-4 space-y-2 text-xs">
+    ${d.length?`<div class="flex flex-wrap items-center gap-1.5"><span class="text-mute">Dépend de :</span>${d.map(taskChip).join('')}</div>`:''}
+    ${issues.length?`<div class="text-rosso flex items-center gap-1">${icon('alert')} ${esc(issues.join(' · '))}</div>`:''}
+    ${b.length?`<div class="flex flex-wrap items-center gap-1.5"><span class="text-mute">Bloque :</span>${b.map(taskChip).join('')}</div>`:''}
+    ${mtg.length?`<div class="flex flex-wrap items-center gap-1.5"><span class="text-mute">Réunions :</span>${mtg.map(m=>`<button class="chip hover:text-ink" onclick="switchView('meetings')">${icon('calendar')} ${esc(m.title)} · ${fmtDM(ymd(new Date(m.starts_at)))}</button>`).join('')}</div>`:''}
+  </div>`;
+}
+const HIST_FIELDS={ name:'Intitulé', status:'Statut', progress:'Avancement', priority:'Criticité', start_date:'Début', end_date:'Échéance', assignee_id:'Responsable', link:'Lien', link_open:'Ouverture contribution', description:'Description', department_id:'Département' };
+function histValue(k,v){
+  if(v===null||v===undefined||v==='') return '—';
+  if(k==='progress') return v+'%';
+  if(k==='start_date'||k==='end_date') return fmtDM(v);
+  if(k==='assignee_id') return userName(v);
+  if(k==='department_id') return allDeptNames[v]||'—';
+  if(k==='link_open') return v?'ouverte':'fermée';
+  return String(v);
+}
+function histLine(h){
+  const d=h.details||{}, who=`<b class="text-ink">${esc(h.actor_name||'Système')}</b>`;
+  switch(h.action){
+    case 'create': return `${who} a créé la tâche`;
+    case 'delete': return `${who} a supprimé la tâche`;
+    case 'subtask_add': return `${who} a ajouté la sous-tâche « ${esc(d.title)} »`;
+    case 'subtask_done': return `${who} a coché « ${esc(d.title)} »`;
+    case 'subtask_undone': return `${who} a décoché « ${esc(d.title)} »`;
+    case 'subtask_delete': return `${who} a supprimé la sous-tâche « ${esc(d.title)} »`;
+    default: return `${who} a modifié : `+Object.entries(d).filter(([k])=>HIST_FIELDS[k]).map(([k,c])=>
+      (k==='description'?HIST_FIELDS[k]:`${HIST_FIELDS[k]} ${esc(histValue(k,c.old))} → <span class="text-ink">${esc(histValue(k,c.new))}</span>`)).join(', ');
+  }
+}
+function historyHTML(id){
+  const h=historyCache[id];
+  if(h===null) return '';                                   // historique indisponible (migration absente)
+  if(h===undefined) return `<div class="mt-4 text-xs text-mute">${icon('history')} Chargement de l’historique…</div>`;
+  const fmt=s=>{ const d=new Date(s); return `${fmtDM(ymd(d))} ${fmtTime(d)}`; };
+  return `<div class="mt-4"><div class="text-xs text-mute mb-1 flex items-center gap-1">${icon('history')} Historique</div>
+    ${h.length?`<ul class="space-y-1 text-xs text-mute">${h.slice(0,12).map(x=>`<li><span class="font-display tnum">${fmt(x.created_at)}</span> · ${histLine(x)}</li>`).join('')}</ul>`:'<p class="text-xs text-mute">Aucune modification enregistrée.</p>'}
+  </div>`;
+}
+/* Ouvre une tâche dans l'onglet Interventions, dépliée, et la fait défiler à l'écran. */
+function openTask(id){
+  const t=taskById(id); if(!t) return;
+  filters.q=''; filters.status='ALL'; filters.priority='ALL'; filters.dept='ALL';
+  const s=document.getElementById('search'); if(s) s.value='';
+  document.querySelectorAll('#controls select').forEach(sel=>{ if(sel.id!=='fltDept' && sel.options[0].value==='ALL') sel.value='ALL'; });
+  expanded.add(id); switchView('table'); populateDeptControls();
+  loadHistory([id]).then(()=>{ if(currentView==='table') renderView(); document.getElementById('task-row-'+id)?.scrollIntoView({ behavior:REDUCE?'auto':'smooth', block:'center' }); });
+}
+async function saveQuick(id){
+  const t=taskById(id); if(!canEditTask(t)) return;
+  const status=document.getElementById('q-status-'+id).value;
+  let progress=parseInt(document.getElementById('q-progress-'+id).value,10);
+  if(status==='Prêt / Validé') progress=100;
+  const { error }=await sb.from('tasks').update({ status, progress }).eq('id',id);
+  if(error){ alert("Modification refusée : "+error.message); return; }
+  await loadData(); await loadHistory([...expanded]); renderAll();
+}
+
+/* ============================ VUE : MES TÂCHES ============================ */
+function renderMine(){
+  const mine=allTasks().filter(t=>me && t.assignee_id===me.id);
+  const todo=mine.filter(t=>!isDone(t)).sort((a,b)=>(pDate(a.end)||0)-(pDate(b.end)||0));
+  const doneN=mine.length-todo.length, late=todo.filter(isLate).length;
+  const now=Date.now();
+  const myMeetings=meetings.filter(m=> me && m.participants.includes(me.id) && new Date(m.ends_at).getTime()>=now);
+  const pending=myMeetings.filter(m=>!m.responses[me.id]).length;
+  const card=t=>{ const issues=depIssues(t);
+    return `<div class="bg-panel2/40 border border-line rounded-xl p-3 ${isLate(t)?'overdue-row':''}">
+      <div class="flex flex-wrap items-center gap-1.5">
+        <button class="text-sm font-semibold text-ink hover:underline text-left" onclick="openTask(${t.id})">${esc(t.name)}</button>
+        ${prioBadge(t.priority)} ${statusBadge(t.status)}
+        ${isLate(t)?'<span class="badge bg-rosso/15 text-rosso border-rosso/40">En retard</span>':''}
+        ${issues.length?`<span class="badge bg-rosso/15 text-rosso border-rosso/40" title="${esc(issues.join(' · '))}">${icon('alert')} dépendance</span>`:''}
+      </div>
+      <div class="text-xs text-mute mt-1">${esc(taskDeptName(t))} · ${fmtDM(t.start)} → <b class="${isLate(t)?'text-rosso':'text-ink'}">${fmtDM(t.end)}</b> · ${t.progress}%</div>
+      ${canEditTask(t)&&!isAdmin?`<div class="mt-2">${quickEditHTML(t)}</div>`:''}
+    </div>`; };
+  document.getElementById('view').innerHTML=`
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+      <div class="tile"><div class="tile-num font-display tnum text-ink">${todo.length}</div><div class="tile-label">Tâches à faire</div></div>
+      <div class="tile"><div class="tile-num font-display tnum ${late?'text-rosso':'text-mute'}">${late}</div><div class="tile-label">En retard</div></div>
+      <div class="tile"><div class="tile-num font-display tnum text-ink">${myMeetings.length}</div><div class="tile-label">Réunions à venir</div></div>
+      <div class="tile"><div class="tile-num font-display tnum ${pending?'text-amber':'text-mute'}">${pending}</div><div class="tile-label">Réponses en attente</div></div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="bg-panel border border-line rounded-2xl p-5">
+        <h3 class="font-display font-bold text-white text-sm mb-3">Mes tâches ${doneN?`<span class="text-mute font-normal text-xs">· ${doneN} terminée(s)</span>`:''}</h3>
+        <div class="space-y-2">${todo.length?todo.map(card).join(''):'<p class="text-sm text-mute py-4 text-center">Aucune tâche ouverte ne t’est assignée.</p>'}</div>
+      </div>
+      <div class="bg-panel border border-line rounded-2xl p-5">
+        <h3 class="font-display font-bold text-white text-sm mb-3">Mes prochaines réunions</h3>
+        ${myMeetings.length?meetingGroups(myMeetings.slice(0,6)):'<p class="text-sm text-mute py-4 text-center">Aucune réunion à venir.</p>'}
+      </div>
+    </div>`;
+  hydrateIcons();
+}
+
+/* ============================ VUE : CALENDRIER ============================ */
+function calShift(n){ calMonth=new Date(calMonth.getFullYear(), calMonth.getMonth()+n, 1); renderView(); }
+function calToday(){ const t=new Date(); calMonth=new Date(t.getFullYear(), t.getMonth(), 1); renderView(); }
+function renderCalendar(){
+  if(!calMonth){ const t=new Date(); calMonth=new Date(t.getFullYear(), t.getMonth(), 1); }
+  const first=calMonth, start=addDays(first, -((first.getDay()+6)%7));   // lundi de la 1re semaine
+  const last=new Date(first.getFullYear(), first.getMonth()+1, 0), end=addDays(last, (7-last.getDay())%7);
+  const tasks=allTasks(), raceD=new Date(race.date), todayKey=ymd(today0());
+  const byDay={};
+  const push=(key,item)=>{ (byDay[key] ||= []).push(item); };
+  meetings.forEach(m=>{ const s=new Date(m.starts_at); push(ymd(s), { sort:s.getHours()*60+s.getMinutes(), html:`<div class="cal-item" style="border-left-color:${C.meet}" onclick="switchView('meetings')" title="${esc(m.title)}">${fmtTime(s)} ${esc(m.title)}</div>` }); });
+  tasks.forEach(t=>{
+    if(t.start) push(t.start, { sort:2000, html:`<div class="cal-item" style="border-left-color:${prioColor(t.priority)}" onclick="openTask(${t.id})" title="Début : ${esc(t.name)}">▶ ${esc(t.name)}</div>` });
+    if(t.end) push(t.end, { sort:1500, html:`<div class="cal-item" style="border-left-color:${isDone(t)?C.go:isLate(t)?C.rosso:prioColor(t.priority)}" onclick="openTask(${t.id})" title="Échéance : ${esc(t.name)}">⚑ ${esc(t.name)}${isDone(t)?' ✓':''}</div>` });
+  });
+  if(!isNaN(raceD)) push(ymd(raceD), { sort:-1, html:`<div class="cal-item" style="border-left-color:${C.rosso};background:rgba(225,6,0,.18)" title="${esc(race.name)}">🏁 ${esc(race.name||'Course')}</div>` });
+  let cells='';
+  for(let d=new Date(start); d<=end; d=addDays(d,1)){
+    const key=ymd(d), items=(byDay[key]||[]).sort((a,b)=>a.sort-b.sort), MAX=4;
+    cells+=`<div class="cal-cell ${d.getMonth()!==first.getMonth()?'out':''} ${key===todayKey?'today':''}">
+      <div class="cal-day">${d.getDate()}</div>
+      ${items.slice(0,MAX).map(i=>i.html).join('')}
+      ${items.length>MAX?`<div class="text-[10px] text-mute pl-1">+${items.length-MAX} autre(s)</div>`:''}
+    </div>`;
+  }
+  const title=first.toLocaleDateString('fr-FR',{ month:'long', year:'numeric' });
+  document.getElementById('view').innerHTML=`
+    <div class="bg-panel border border-line rounded-2xl p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div class="flex items-center gap-2">
+          <button class="iconbtn" onclick="calShift(-1)" aria-label="Mois précédent">${icon('chevron-left')}</button>
+          <h3 class="font-display font-bold text-white text-base capitalize w-44 text-center">${esc(title)}</h3>
+          <button class="iconbtn" onclick="calShift(1)" aria-label="Mois suivant">${icon('chevron-right')}</button>
+          <button class="btn btn-ghost !py-1.5 text-xs" onclick="calToday()">Aujourd’hui</button>
+        </div>
+        <div class="flex flex-wrap items-center gap-4 text-[11px] text-mute">
+          <span class="flex items-center gap-1.5"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${C.meet}"></i>Réunion</span>
+          <span>▶ Début de tâche</span><span>⚑ Échéance</span>
+          <span class="flex items-center gap-1.5"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${C.rosso}"></i>Course / retard</span>
+        </div>
+      </div>
+      <div class="overflow-x-auto"><div class="min-w-[700px]">
+        <div class="cal-grid">${['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(j=>`<div class="cal-head">${j}</div>`).join('')}${cells}</div>
+      </div></div>
+    </div>`;
+  hydrateIcons();
+}
+
 /* ============================ VUE : GANTT ============================ */
+function setGanttZoom(z){ ganttZoom=z; renderView(); }
 function renderGantt(){
   const data=getFiltered().map(s=>({ ...s, tasks:s.tasks.filter(t=>t.start&&t.end) })).filter(s=>s.tasks.length);
   let dates=[]; data.forEach(s=>s.tasks.forEach(t=>{ dates.push(pDate(t.start)); dates.push(pDate(t.end)); }));
@@ -576,53 +845,146 @@ function renderGantt(){
   if(!data.length && !mtgs.length){ document.getElementById('view').innerHTML=emptyState('Aucune tâche ni réunion planifiée à afficher.'); return; }
   const DAY=86400000; let min=new Date(Math.min(...dates)),max=new Date(Math.max(...dates)); min=new Date(min-2*DAY); max=new Date(+max+3*DAY);
   mtgs=mtgs.filter(m=> new Date(m.ends_at)>=min && new Date(m.starts_at)<=max);
-  const span=Math.max(DAY,max-min), pct=d=>((d-min)/span)*100;
-  let ticks=[],cur=new Date(min); cur.setDate(cur.getDate()+((8-cur.getDay())%7)); while(cur<=max){ ticks.push(new Date(cur)); cur=new Date(+cur+7*DAY); }
-  const grid=ticks.map(d=>`<div class="g-grid" style="left:${pct(d).toFixed(2)}%"></div>`).join('');
-  const axis=ticks.map(d=>`<span class="absolute font-display tnum text-[10px] text-mute" style="left:${pct(d).toFixed(2)}%; transform:translateX(-50%)">${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}</span>`).join('');
+  const span=Math.max(DAY,max-min), pct=d=>((d-min)/span)*100, days=Math.round(span/DAY);
+  // Zoom : largeur en pixels par jour (auto = s'adapte à l'écran).
+  const PX={ week:38, month:12 }[ganttZoom];
+  const labelW=window.innerWidth<=640?120:220;
+  const chartMinW=PX ? labelW+days*PX : 760;
+  let ticks=[];
+  if(ganttZoom==='week'){ for(let d=new Date(min); d<=max; d=addDays(d,1)) ticks.push(new Date(d)); }
+  else if(ganttZoom==='month'){ for(let d=new Date(min.getFullYear(),min.getMonth()+1,1); d<=max; d=new Date(d.getFullYear(),d.getMonth()+1,1)) ticks.push(d); }
+  else { let cur=new Date(min); cur.setDate(cur.getDate()+((8-cur.getDay())%7)); while(cur<=max){ ticks.push(new Date(cur)); cur=new Date(+cur+7*DAY); } }
+  const tickLabel=d=> ganttZoom==='week' ? (d.getDay()===1?fmtDM(ymd(d)):String(d.getDate()))
+                    : ganttZoom==='month' ? d.toLocaleDateString('fr-FR',{ month:'short', year:'2-digit' })
+                    : `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+  const grid=ticks.map(d=>`<div class="g-grid" style="left:${pct(d).toFixed(2)}%${ganttZoom==='week'&&d.getDay()===1?';background:#2A333F':''}"></div>`).join('');
+  const axis=ticks.map(d=>`<span class="absolute font-display tnum text-[10px] ${ganttZoom==='week'&&(d.getDay()===0||d.getDay()===6)?'text-mute/50':'text-mute'}" style="left:${pct(d).toFixed(2)}%; transform:translateX(-50%)">${tickLabel(d)}</span>`).join('');
   const todayLine=`<div class="g-today" style="left:${pct(today0()).toFixed(2)}%"></div>`;
   const raceLine=isNaN(raceD)?'':`<div class="g-race" style="left:${pct(new Date(raceD.getFullYear(),raceD.getMonth(),raceD.getDate())).toFixed(2)}%"></div>`;
   const rows=data.map(sec=>`
     <div class="mb-4"><div class="text-xs font-display font-bold text-ink bg-panel2 rounded-lg px-3 py-2 mb-2 inline-flex items-center gap-2">${icon('flag')} ${esc(sec.rubrique)}</div>
-    ${sec.tasks.map(t=>{ const l=pct(pDate(t.start)),w=Math.max(1.5,pct(pDate(t.end))-l),col=prioColor(t.priority);
-      return `<div class="g-row" title="${esc(t.name)} — ${esc(assigneeLabel(t))}&#10;${fmtDM(t.start)} → ${fmtDM(t.end)} · ${t.progress}% · ${esc(t.status)}">
-        <div class="g-label truncate">${esc(t.name)}<br><small>${esc(assigneeLabel(t))}</small></div>
-        <div class="g-track"><div class="g-bar" style="left:${l.toFixed(2)}%; width:${w.toFixed(2)}%; background:${col}22; border:1px solid ${col}"><div class="fill" style="width:${t.progress}%; background:${col}"></div><span class="lab" style="color:${t.progress>55?'#0B0E13':'#E6EDF3'}">${t.progress}%</span></div></div>
+    ${sec.tasks.map(t=>{ const l=pct(pDate(t.start)),w=Math.max(1.5,pct(pDate(t.end))-l),col=prioColor(t.priority), issues=isDone(t)?[]:depIssues(t);
+      const dep=depsOf(t.id).map(id=>taskById(id)?.name).filter(Boolean);
+      return `<div class="g-row" title="${esc(t.name)} — ${esc(assigneeLabel(t))}&#10;${fmtDM(t.start)} → ${fmtDM(t.end)} · ${t.progress}% · ${esc(t.status)}${dep.length?'&#10;Dépend de : '+esc(dep.join(', ')):''}${issues.length?'&#10;⚠ '+esc(issues.join(' · ')):''}">
+        <div class="g-label truncate">${issues.length?`<span class="text-rosso">${icon('alert')}</span> `:''}${esc(t.name)}<br><small>${esc(assigneeLabel(t))}</small></div>
+        <div class="g-track"><div class="g-bar ${isAdmin?'g-drag':''} ${issues.length?'g-conflict':''}" data-id="${t.id}" data-s="${t.start}" data-e="${t.end}" style="left:${l.toFixed(2)}%; width:${w.toFixed(2)}%; background:${col}22; border:1px solid ${col}">
+          <div class="fill" style="width:${t.progress}%; background:${col}"></div><span class="lab" style="color:${t.progress>55?'#0B0E13':'#E6EDF3'}">${t.progress}%</span>
+          ${isAdmin?'<span class="g-h g-hl" data-h="l"></span><span class="g-h g-hr" data-h="r"></span>':''}
+        </div></div>
       </div>`; }).join('')}</div>`).join('');
   const meetingRows=mtgs.map(m=>{ const s=new Date(m.starts_at), e=new Date(m.ends_at), l=pct(s), w=Math.max(0.8,pct(e)-l), live=s<=Date.now()&&Date.now()<e;
-    const when=`${fmtDM(toLocalInput(s).slice(0,10))} ${fmtTime(s)}`;
+    const when=`${fmtDM(ymd(s))} ${fmtTime(s)}`;
     return `<div class="g-row cursor-pointer" onclick="switchView('meetings')" title="${esc(m.title)}&#10;${esc(fmtDay(s))} · ${fmtTime(s)} → ${fmtTime(e)}${m.location?' · '+esc(m.location):''}">
       <div class="g-label truncate">${esc(m.title)}<br><small>${when}${live?' · en cours':''}</small></div>
       <div class="g-track"><div class="g-bar" style="left:${l.toFixed(2)}%; width:${w.toFixed(2)}%; min-width:8px; background:${C.meet}; border:1px solid ${C.meet}"></div></div>
     </div>`; }).join('');
   const meetingSection=mtgs.length?`
     <div class="mt-2"><div class="text-xs font-display font-bold text-ink bg-panel2 rounded-lg px-3 py-2 mb-2 inline-flex items-center gap-2">${icon('calendar')} Réunions</div>${meetingRows}</div>`:'';
+  const zb=(z,l)=>`<button class="zoom-btn" aria-pressed="${ganttZoom===z}" onclick="setGanttZoom('${z}')">${l}</button>`;
   document.getElementById('view').innerHTML=`
     <div class="bg-panel border border-line rounded-2xl p-5 overflow-x-auto">
-      <div class="flex items-center justify-between mb-4"><h3 class="font-display font-bold text-white text-sm">Chronogramme paddock</h3>
-        <div class="flex items-center gap-4 text-[10px] text-mute"><span class="flex items-center gap-1.5"><i class="inline-block w-3 h-0.5" style="background:${C.info}"></i>Aujourd’hui</span><span class="flex items-center gap-1.5"><i class="inline-block w-3 h-0.5" style="background:${C.rosso}"></i>Course</span>${mtgs.length?`<span class="flex items-center gap-1.5"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${C.meet}"></i>Réunion</span>`:''}</div></div>
-      <div class="min-w-[760px]">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div class="flex items-center gap-3"><h3 class="font-display font-bold text-white text-sm">Chronogramme paddock</h3>
+          <div class="flex items-center gap-1 bg-track border border-line rounded-lg p-0.5">${zb('auto','Auto')}${zb('week','Semaine')}${zb('month','Mois')}</div></div>
+        <div class="flex flex-wrap items-center gap-4 text-[10px] text-mute"><span class="flex items-center gap-1.5"><i class="inline-block w-3 h-0.5" style="background:${C.info}"></i>Aujourd’hui</span><span class="flex items-center gap-1.5"><i class="inline-block w-3 h-0.5" style="background:${C.rosso}"></i>Course</span>${mtgs.length?`<span class="flex items-center gap-1.5"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:${C.meet}"></i>Réunion</span>`:''}<span class="flex items-center gap-1.5"><i class="inline-block w-3 h-2.5 rounded-sm" style="outline:2px dashed ${C.rosso}"></i>Dépendance non tenue</span></div></div>
+      ${isAdmin?'<p class="text-[11px] text-mute mb-3">Glisse une barre pour décaler la tâche, ou tire sur ses bords pour changer le début ou l’échéance.</p>':''}
+      <div style="min-width:${chartMinW}px">
         <div class="g-row mb-2" style="height:20px"><div class="g-label"></div><div class="relative flex-1 h-full">${axis}</div></div>
         <div class="g-body pt-1"><div class="g-overlay">${grid}</div>${rows}${meetingSection}<div class="g-overlay">${todayLine}${raceLine}</div></div>
       </div>
     </div>`;
+  if(isAdmin) attachGanttDrag(span);
+}
+/* Glisser-déposer des barres (ingénieur) : déplacer, ou étirer par les bords. Aimanté au jour. */
+function attachGanttDrag(span){
+  const DAY=86400000;
+  document.querySelectorAll('#view .g-drag').forEach(bar=>{
+    bar.addEventListener('pointerdown', ev=>{
+      if(ev.button!==0) return;
+      ev.preventDefault();
+      const mode=ev.target.dataset.h||'move';
+      const trackW=bar.parentElement.getBoundingClientRect().width;
+      const s0=pDate(bar.dataset.s), e0=pDate(bar.dataset.e), x0=ev.clientX;
+      const left0=parseFloat(bar.style.left), width0=parseFloat(bar.style.width);
+      const pctPerDay=DAY/span*100;
+      const lab=bar.querySelector('.lab'), labTxt=lab.textContent;
+      bar.setPointerCapture(ev.pointerId); bar.classList.add('dragging');
+      const move=e=>{
+        const dd=Math.round((e.clientX-x0)/trackW*span/DAY);
+        let ns=s0, ne=e0;
+        if(mode==='move'){ ns=addDays(s0,dd); ne=addDays(e0,dd); }
+        else if(mode==='l'){ ns=addDays(s0,dd); if(ns>e0) ns=e0; }
+        else { ne=addDays(e0,dd); if(ne<s0) ne=s0; }
+        const l=left0+(ns-s0)/DAY*pctPerDay, w=Math.max(1.5, width0+((ne-e0)-(ns-s0))/DAY*pctPerDay);
+        bar.style.left=l.toFixed(2)+'%'; bar.style.width=w.toFixed(2)+'%';
+        lab.textContent=`${fmtDM(ymd(ns))} → ${fmtDM(ymd(ne))}`;
+        bar._next={ start:ymd(ns), end:ymd(ne) };
+      };
+      const up=async()=>{
+        bar.removeEventListener('pointermove',move); bar.removeEventListener('pointerup',up); bar.removeEventListener('pointercancel',up);
+        bar.classList.remove('dragging');
+        const n=bar._next; bar._next=null;
+        if(!n || (n.start===bar.dataset.s && n.end===bar.dataset.e)){ lab.textContent=labTxt; return; }
+        const { error }=await sb.from('tasks').update({ start_date:n.start, end_date:n.end }).eq('id', Number(bar.dataset.id));
+        if(error) alert('Erreur : '+error.message);
+        await loadData(); renderAll();
+      };
+      bar.addEventListener('pointermove',move); bar.addEventListener('pointerup',up); bar.addEventListener('pointercancel',up);
+    });
+  });
 }
 
 /* ============================ VUE : RÉUNIONS ============================ */
 const fmtDay  = d => d.toLocaleDateString('fr-FR',{ weekday:'long', day:'numeric', month:'long' });
 const fmtTime = d => d.toLocaleTimeString('fr-FR',{ hour:'2-digit', minute:'2-digit' });
 function toLocalInput(d){ const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
-function userName(id){ const u=users.find(x=>x.id===id); return u?(u.full_name||u.email):'Participant'; }
+function userName(id){ const u=users.find(x=>x.id===id); return u?(u.full_name||u.email):(me&&id===me.id?(me.full_name||me.email):'Participant'); }
 function meetingScope(m){ return m.department_id ? (allDeptNames[m.department_id]||'Autre département') : 'Toutes équipes'; }
 function nextMeeting(){ const now=Date.now(); return meetings.find(m=> new Date(m.ends_at).getTime()>=now) || null; }
 
+const RSVP={ present:{ label:'Présent', dot:C.go }, maybe:{ label:'Peut-être', dot:C.amber }, absent:{ label:'Absent', dot:C.rosso } };
+function rsvpSummary(m){
+  const c={ present:0, maybe:0, absent:0, none:0 };
+  m.participants.forEach(id=>{ c[m.responses[id]||'none']++; });
+  return [c.present?`${c.present} présent(s)`:'', c.maybe?`${c.maybe} peut-être`:'', c.absent?`${c.absent} absent(s)`:'', c.none?`${c.none} sans réponse`:''].filter(Boolean).join(' · ');
+}
+function participantsHTML(m){
+  if(!m.participants.length) return '';
+  return `<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-mute mt-1">${icon('users')}
+    ${m.participants.map(id=>{ const r=RSVP[m.responses[id]]; return `<span class="inline-flex items-center gap-1" title="${r?r.label:'Pas encore répondu'}"><i class="inline-block w-2 h-2 rounded-full" style="background:${r?r.dot:'#4b5664'}"></i>${esc(userName(id))}</span>`; }).join('')}
+    <span class="text-[11px]">(${rsvpSummary(m)})</span></div>`;
+}
+function rsvpButtonsHTML(m){
+  const mine=m.responses[me.id]||'';
+  return `<div class="flex flex-wrap items-center gap-1.5 mt-2"><span class="text-[11px] text-mute mr-1">Ta réponse :</span>
+    ${Object.entries(RSVP).map(([k,v])=>`<button class="rsvp-btn ${mine===k?'on-'+k:''}" onclick="setResponse(${m.id},'${k}')">${v.label}</button>`).join('')}</div>`;
+}
+function minutesHTML(m){
+  const open=isAdmin && minutesOpen.has(m.id);
+  if(open) return `<div class="mt-3 bg-track/60 border border-line rounded-xl p-3 space-y-2">
+      <div class="text-xs text-mute">Compte rendu — décisions, actions, points ouverts</div>
+      <textarea id="min-${m.id}" rows="4" class="in" placeholder="Ex : Turbo validé. Refaire le test d’étanchéité avant jeudi…">${esc(m.minutes||'')}</textarea>
+      <div class="flex justify-end gap-2"><button class="btn btn-ghost !py-1.5" onclick="toggleMinutes(${m.id})">Fermer</button><button class="btn btn-primary !py-1.5" onclick="saveMinutes(${m.id})">Enregistrer le compte rendu</button></div>
+      <div class="border-t border-line pt-2">
+        <div class="text-xs text-mute mb-1">Transformer une décision en tâche (elle sera liée à cette réunion)</div>
+        <div class="grid grid-cols-1 sm:grid-cols-[1fr,auto,auto,auto] gap-2">
+          <input id="mt-name-${m.id}" class="in" placeholder="Intitulé de la tâche">
+          <select id="mt-dept-${m.id}" class="in w-auto">${projectData.map(d=>`<option value="${d.id}"${d.id===m.department_id?' selected':''}>${esc(d.rubrique)}</option>`).join('')}</select>
+          <input id="mt-end-${m.id}" type="date" class="in w-auto" title="Échéance" value="${ymd(addDays(today0(),7))}">
+          <button class="btn !py-1.5" onclick="createTaskFromMeeting(${m.id})">${icon('plus')} Créer</button>
+        </div>
+      </div>
+    </div>`;
+  if(!m.minutes) return '';
+  return `<div class="mt-2 border-l-2 border-line pl-3"><div class="text-[11px] text-mute">Compte rendu${m.minutes_updated_at?' · '+fmtDM(ymd(new Date(m.minutes_updated_at))):''}</div><div class="text-xs text-ink whitespace-pre-wrap">${esc(m.minutes)}</div></div>`;
+}
 function meetingCard(m){
   const s=new Date(m.starts_at), e=new Date(m.ends_at), now=Date.now();
   const live=s.getTime()<=now && now<e.getTime(), past=e.getTime()<now;
   const invited=me && m.participants.includes(me.id);
   const link=safeUrl(m.link);
   return `
-    <div class="list-row items-start ${past?'opacity-60':''}">
+    <div class="list-row items-start ${past&&!minutesOpen.has(m.id)?'opacity-70':''}">
       <div class="shrink-0 w-24 font-display tnum text-sm text-ink pt-0.5">${fmtTime(s)}<span class="text-mute"> → ${fmtTime(e)}</span></div>
       <div class="flex-1 min-w-0">
         <div class="flex flex-wrap items-center gap-1.5">
@@ -634,11 +996,16 @@ function meetingCard(m){
         <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-mute mt-1">
           ${m.location?`<span class="flex items-center gap-1">${icon('map-pin')} ${esc(m.location)}</span>`:''}
           ${link?`<a href="${esc(link)}" target="_blank" rel="noopener noreferrer" class="text-info hover:underline flex items-center gap-1">${icon('video')} Rejoindre</a>`:''}
-          ${m.participants.length?`<span class="flex items-center gap-1">${icon('users')} ${m.participants.map(id=>esc(userName(id))).join(', ')}</span>`:''}
+          <button class="text-info hover:underline flex items-center gap-1" onclick="downloadICS([${m.id}])">${icon('download')} Ajouter à mon agenda</button>
         </div>
+        ${participantsHTML(m)}
+        ${m.tasks.length?`<div class="flex flex-wrap items-center gap-1.5 text-xs mt-1.5"><span class="text-mute">Tâches liées :</span>${m.tasks.map(taskChip).join('')}</div>`:''}
         ${m.description?`<div class="text-xs text-ink/80 whitespace-pre-wrap mt-1.5">${esc(m.description)}</div>`:''}
+        ${invited&&!past?rsvpButtonsHTML(m):''}
+        ${minutesHTML(m)}
       </div>
       ${isAdmin?`<div class="shrink-0 flex gap-1">
+        <button class="iconbtn" onclick="toggleMinutes(${m.id})" title="Compte rendu" aria-label="Compte rendu">${icon('file-text')}</button>
         <button class="iconbtn" onclick="editMeeting(${m.id})" title="Modifier" aria-label="Modifier">${icon('pencil')}</button>
         <button class="iconbtn danger" onclick="deleteMeeting(${m.id})" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
       </div>`:''}
@@ -653,17 +1020,26 @@ function meetingGroups(list){
 }
 function renderMeetingList(){
   const el=document.getElementById('meeting-list'); if(!el) return;
+  const a=document.activeElement; if(el.contains(a) && (a.tagName==='TEXTAREA'||a.tagName==='INPUT')) return;   // ne pas effacer une saisie en cours
   const now=Date.now();
   const upcoming=meetings.filter(m=> new Date(m.ends_at).getTime()>=now);
   const past=meetings.filter(m=> new Date(m.ends_at).getTime()<now).reverse();
   el.innerHTML=`
     <div class="bg-panel border border-line rounded-2xl p-5">
-      <div class="flex items-center gap-2 mb-4"><h3 class="font-display font-bold text-white text-sm">Réunions à venir</h3><span class="badge bg-panel2 text-mute border-line">${upcoming.length}</span></div>
+      <div class="flex flex-wrap items-center gap-2 mb-4"><h3 class="font-display font-bold text-white text-sm">Réunions à venir</h3><span class="badge bg-panel2 text-mute border-line">${upcoming.length}</span>
+        ${upcoming.length?`<button class="ml-auto text-xs text-info hover:underline flex items-center gap-1" onclick="downloadICS(${JSON.stringify(upcoming.map(m=>m.id))})">${icon('download')} Tout ajouter à mon agenda</button>`:''}</div>
       ${upcoming.length?meetingGroups(upcoming):`<p class="text-sm text-mute py-4 text-center">Aucune réunion planifiée.</p>`}
       ${past.length?`<button class="btn btn-ghost mt-2" onclick="showPastMeetings=!showPastMeetings; renderMeetingList()">${showPastMeetings?'Masquer':'Afficher'} les réunions passées (${past.length})</button>
         ${showPastMeetings?`<div class="mt-4">${meetingGroups(past)}</div>`:''}`:''}
     </div>`;
   hydrateIcons();
+}
+function taskPickerHTML(containerId, excludeId){
+  const groups=projectData.map(sec=>{ const list=sec.tasks.filter(t=>t.id!==excludeId); if(!list.length) return '';
+    return `<div><div class="text-[11px] font-semibold uppercase tracking-wide text-mute border-b border-line pb-1 mb-1.5">${esc(sec.rubrique)}</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">${list.map(t=>`
+        <label class="flex items-center gap-2 text-sm text-ink min-w-0"><input type="checkbox" value="${t.id}" class="accent-go w-4 h-4 shrink-0"><span class="truncate">${esc(t.name)}</span></label>`).join('')}</div></div>`; }).join('');
+  return `<div id="${containerId}" class="max-h-48 overflow-y-auto space-y-3">${groups||'<span class="text-xs text-mute">Aucune tâche.</span>'}</div>`;
 }
 function renderMeetings(){
   const form=isAdmin?`
@@ -681,6 +1057,7 @@ function renderMeetings(){
           <button type="button" class="text-xs text-info hover:underline" onclick="setAllParticipants(true)">Tout cocher</button>
           <button type="button" class="text-xs text-info hover:underline" onclick="setAllParticipants(false)">Tout décocher</button></div>
           <div id="m-participants" class="max-h-64 overflow-y-auto space-y-3">${participantGroups()}</div></div>
+        <div class="md:col-span-3"><label class="block text-xs text-mute mb-1">Tâches liées <span class="text-mute/70">(optionnel)</span></label>${taskPickerHTML('m-tasks')}</div>
         <div class="md:col-span-3"><label class="block text-xs text-mute mb-1">Ordre du jour (optionnel)</label><textarea id="m-desc" rows="3" class="in" placeholder="Points à aborder…"></textarea></div>
         <div class="md:col-span-3 flex justify-end gap-3">
           <button type="button" id="m-cancel" onclick="resetMeetingForm()" class="btn hidden">Annuler</button>
@@ -738,10 +1115,17 @@ function editMeeting(id){
   document.getElementById('m-link').value=m.link||'';
   document.getElementById('m-desc').value=m.description||'';
   document.querySelectorAll('#m-participants input[type=checkbox]').forEach(c=>{ c.checked=m.participants.includes(c.value); });
+  document.querySelectorAll('#m-tasks input[type=checkbox]').forEach(c=>{ c.checked=m.tasks.includes(Number(c.value)); });
   document.getElementById('meeting-form-title').innerHTML=icon('pencil')+' Modifier la réunion';
   document.getElementById('m-submit').innerText='Enregistrer les modifications';
   document.getElementById('m-cancel').classList.remove('hidden');
   document.getElementById('meeting-form').scrollIntoView({ behavior:REDUCE?'auto':'smooth', block:'start' });
+}
+/* Applique la différence entre deux listes (ajouts / retraits) sur une table de liaison. */
+async function syncLinks(table, meetingId, col, before, after){
+  const add=after.filter(x=>!before.includes(x)), del=before.filter(x=>!after.includes(x));
+  if(del.length){ const r=await sb.from(table).delete().eq('meeting_id',meetingId).in(col, del); if(r.error) throw r.error; }
+  if(add.length){ const r=await sb.from(table).insert(add.map(v=>({ meeting_id:meetingId, [col]:v }))); if(r.error) throw r.error; }
 }
 async function saveMeeting(e){
   e.preventDefault();
@@ -756,15 +1140,18 @@ async function saveMeeting(e){
     location:document.getElementById('m-location').value.trim()||null, link:safeUrl(rawLink),
     description:document.getElementById('m-desc').value.trim()||null, department_id:dept===''?null:Number(dept) };
   const participants=[...document.querySelectorAll('#m-participants input[type=checkbox]:checked')].map(c=>c.value);
+  const taskIds=[...document.querySelectorAll('#m-tasks input[type=checkbox]:checked')].map(c=>Number(c.value));
   if(!participants.length && !confirm("Aucun participant coché : seuls les ingénieurs verront cette réunion. Continuer ?")) return;
   const editId=document.getElementById('m-edit-id').value;
+  const prev=editId ? meetings.find(x=>x.id===Number(editId)) : null;
   const btn=document.getElementById('m-submit'); btn.disabled=true;
   try{
     let id=Number(editId);
     if(editId){ const { error }=await sb.from('meetings').update(payload).eq('id',id); if(error) throw error; }
     else{ const { data, error }=await sb.from('meetings').insert(payload).select('id').single(); if(error) throw error; id=data.id; }
-    const del=await sb.from('meeting_participants').delete().eq('meeting_id',id); if(del.error) throw del.error;
-    if(participants.length){ const ins=await sb.from('meeting_participants').insert(participants.map(user_id=>({ meeting_id:id, user_id }))); if(ins.error) throw ins.error; }
+    // Seules les différences sont enregistrées : les réponses des invités déjà présents sont conservées.
+    await syncLinks('meeting_participants', id, 'user_id', prev?prev.participants:[], participants);
+    await syncLinks('meeting_tasks', id, 'task_id', prev?prev.tasks:[], taskIds).catch(err=>{ if(taskIds.length) throw err; });
     resetMeetingForm(); await loadMeetings(); renderMeetingList();
   }catch(err){ alert('Erreur : '+err.message); }
   finally{ btn.disabled=false; }
@@ -777,6 +1164,58 @@ async function deleteMeeting(id){
   if(error){ alert('Erreur : '+error.message); return; }
   if(document.getElementById('m-edit-id')?.value==String(id)) resetMeetingForm();
   await loadMeetings(); renderMeetingList();
+}
+async function setResponse(meetingId, response){
+  const { error }=await sb.from('meeting_participants').update({ response }).eq('meeting_id',meetingId).eq('user_id',me.id);
+  if(error){ alert('Erreur : '+error.message); return; }
+  await loadMeetings(); renderAll();
+}
+function toggleMinutes(id){ minutesOpen.has(id)?minutesOpen.delete(id):minutesOpen.add(id); document.activeElement?.blur?.(); renderView(); }
+async function saveMinutes(id){
+  if(!isAdmin) return;
+  const minutes=document.getElementById('min-'+id).value.trim()||null;
+  const { error }=await sb.from('meetings').update({ minutes, minutes_updated_at:new Date().toISOString() }).eq('id',id);
+  if(error){ alert('Erreur : '+error.message); return; }
+  minutesOpen.delete(id); document.activeElement?.blur?.();
+  await loadMeetings(); renderView();
+}
+async function createTaskFromMeeting(id){
+  if(!isAdmin) return;
+  const name=document.getElementById('mt-name-'+id).value.trim(), dept=Number(document.getElementById('mt-dept-'+id).value), end=document.getElementById('mt-end-'+id).value;
+  if(!name){ document.getElementById('mt-name-'+id).focus(); return; }
+  if(!dept){ alert("Crée d’abord un département."); return; }
+  const start=ymd(today0());
+  const { data, error }=await sb.from('tasks').insert({ name, department_id:dept, start_date:start, end_date:(end&&end>=start)?end:start, priority:'Normal', status:'À planifier', progress:0 }).select('id').single();
+  if(error){ alert('Erreur : '+error.message); return; }
+  const link=await sb.from('meeting_tasks').insert({ meeting_id:id, task_id:data.id });
+  if(link.error) alert("Tâche créée, mais le lien avec la réunion a échoué : "+link.error.message);
+  document.getElementById('mt-name-'+id).value='';
+  await loadData(); renderAll();
+}
+
+/* ---- Export agenda (.ics) : Outlook, Google Agenda, Teams, Apple Calendrier ---- */
+function icsDate(d){ return new Date(d).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,''); }
+function icsText(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n'); }
+function icsFold(line){ const out=[]; while(line.length>70){ out.push(line.slice(0,70)); line=' '+line.slice(70); } out.push(line); return out.join('\r\n'); }
+function downloadICS(ids){
+  const list=meetings.filter(m=>ids.includes(m.id)); if(!list.length) return;
+  const now=icsDate(new Date());
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Pit Wall//Reunions//FR','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  list.forEach(m=>{
+    const link=safeUrl(m.link);
+    const desc=[m.description, link?'Visio : '+link:'', m.tasks.length?'Tâches liées : '+m.tasks.map(t=>taskById(t)?.name).filter(Boolean).join(', '):''].filter(Boolean).join('\n\n');
+    lines.push('BEGIN:VEVENT', `UID:pitwall-meeting-${m.id}@${location.hostname||'pitwall'}`, `DTSTAMP:${now}`,
+      `DTSTART:${icsDate(m.starts_at)}`, `DTEND:${icsDate(m.ends_at)}`, `SUMMARY:${icsText(m.title)}`);
+    if(m.location) lines.push(`LOCATION:${icsText(m.location)}`);
+    if(desc) lines.push(`DESCRIPTION:${icsText(desc)}`);
+    if(link) lines.push(`URL:${link}`);
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  const blob=new Blob([lines.map(icsFold).join('\r\n')+'\r\n'], { type:'text/calendar;charset=utf-8' });
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=list.length===1 ? `reunion-${list[0].title.replace(/[^\w\-]+/g,'_').slice(0,40)||list[0].id}.ics` : 'reunions-pitwall.ics';
+  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
 }
 
 /* ============================ VUE : PANNEAU INGÉNIEUR ============================ */
@@ -882,6 +1321,10 @@ function renderAdminPanel(){
           <label class="block text-xs text-mute mb-1">Description (optionnel)</label>
           <textarea id="f-desc" rows="3" class="in" placeholder="Détails, contexte, procédure…"></textarea>
         </div>
+        <div class="md:col-span-3">
+          <label class="block text-xs text-mute mb-1">Dépend de <span class="text-mute/70">— cette tâche ne peut commencer qu’après la fin des tâches cochées</span></label>
+          <div id="f-deps-wrap">${taskPickerHTML('f-deps')}</div>
+        </div>
         <div class="md:col-span-3 flex items-center gap-2">
           <input type="checkbox" id="f-linkopen" class="accent-amber w-4 h-4">
           <label for="f-linkopen" class="text-xs text-mute">Ouvrir le lien de suivi à la contribution (un contributeur pourra le renseigner)</label>
@@ -902,34 +1345,40 @@ function renderAdminPanel(){
 function emptyState(msg){ return `<div class="bg-panel border border-line rounded-2xl py-16 text-center"><div class="mb-2 flex justify-center text-mute">${icon('flag','ic-lg')}</div><p class="text-sm text-mute">${esc(msg)}</p></div>`; }
 
 /* ============================ ROUTAGE ============================ */
+const VIEWS=['mine','pitwall','board','table','gantt','calendar','meetings','admin'];
 function renderView(){
-  if(me && !isAdmin && !me.department_id && currentView!=='meetings'){ document.getElementById('view').innerHTML=emptyState("Aucun département ne t'a été attribué. Un ingénieur doit te rattacher à un département pour que les tâches s'affichent."); return; }
-  if(currentView==='pitwall') renderPitWall();
+  if(me && !isAdmin && !me.department_id && !['mine','meetings','calendar'].includes(currentView)){ document.getElementById('view').innerHTML=emptyState("Aucun département ne t'a été attribué. Un ingénieur doit te rattacher à un département pour que les tâches s'affichent."); return; }
+  if(currentView==='mine') renderMine();
+  else if(currentView==='pitwall') renderPitWall();
   else if(currentView==='board') renderBoard();
   else if(currentView==='table') renderTable();
   else if(currentView==='gantt') renderGantt();
+  else if(currentView==='calendar') renderCalendar();
   else if(currentView==='meetings') renderMeetings();
   else if(currentView==='admin') renderAdminPanel();
 }
 function switchView(v){
   if(v==='admin' && !isAdmin) return;
   currentView=v;
-  ['pitwall','board','table','gantt','meetings','admin'].forEach(k=>{
+  VIEWS.forEach(k=>{
     const btn=document.getElementById('tab-'+k);
     if(btn) btn.setAttribute('aria-selected',k===v);
   });
-  document.getElementById('controls').classList.toggle('hidden', v==='board' || v==='pitwall' || v==='meetings' || v==='admin');
+  document.getElementById('controls').classList.toggle('hidden', !['table','gantt'].includes(v));
   renderView();
   const vw=document.getElementById('view'); vw.classList.remove('fade-up'); void vw.offsetWidth; vw.classList.add('fade-up');
 }
 function renderAll(){
   const tabAdmin=document.getElementById('tab-admin');
   if(tabAdmin) tabAdmin.classList.toggle('hidden', !isAdmin);
-  // Panneau ingénieur déjà affiché : on ne reconstruit pas la page (sinon le formulaire en cours de saisie est effacé),
-  // on rafraîchit seulement ses sous-parties ci-dessous.
-  if(currentView==='meetings' && document.getElementById('meeting-list')) renderMeetingList();   // idem : garde le formulaire réunion
-  else if(!(currentView==='admin' && isAdmin && document.getElementById('task-form'))) renderView();
-  populateDeptControls(); populateAssigneeOptions(); renderDeptManager(); renderUsers();
+  const vw=document.getElementById('view'), a=document.activeElement;
+  const typing=vw && vw.contains(a) && ['INPUT','SELECT','TEXTAREA'].includes(a.tagName);
+  // Panneau ingénieur / réunions déjà affichés : on ne reconstruit pas la page (sinon le formulaire en cours de saisie est effacé),
+  // on rafraîchit seulement leurs sous-parties.
+  if(currentView==='meetings' && document.getElementById('meeting-list')) renderMeetingList();
+  else if(currentView==='admin' && isAdmin && document.getElementById('task-form')) refreshDepPicker();
+  else if(!typing) renderView();
+  populateDeptControls(); populateAssigneeOptions(); renderDeptManager(); renderUsers(); renderUserArea();
 }
 function populateDeptControls(){
   const names=projectData.map(s=>s.rubrique);
@@ -1099,14 +1548,32 @@ async function handleFormSubmit(e){
     progress:parseInt(document.getElementById('f-progress').value,10), link:safeUrl(rawLink),
     status:document.getElementById('f-status').value, link_open:document.getElementById('f-linkopen').checked, description:document.getElementById('f-desc').value.trim()||null };
   const editId=document.getElementById('edit-id').value;
+  const depIds=[...document.querySelectorAll('#f-deps input[type=checkbox]:checked')].map(c=>Number(c.value)).filter(d=>d!==Number(editId));
+  if(editId && wouldCycle(Number(editId), depIds)){ alert("Ces dépendances créeraient une boucle (A dépend de B qui dépend de A)."); return; }
   try{
     payload.department_id=await ensureDepartment(rub);
-    let error;
-    if(editId){ ({ error }=await sb.from('tasks').update(payload).eq('id',editId)); }
-    else      { ({ error }=await sb.from('tasks').insert(payload)); }
-    if(error) throw error;
+    let id=Number(editId);
+    if(editId){ const { error }=await sb.from('tasks').update(payload).eq('id',id); if(error) throw error; }
+    else      { const { data, error }=await sb.from('tasks').insert(payload).select('id').single(); if(error) throw error; id=data.id; }
+    const before=depsOf(id), add=depIds.filter(d=>!before.includes(d)), del=before.filter(d=>!depIds.includes(d));
+    if(del.length){ const r=await sb.from('task_dependencies').delete().eq('task_id',id).in('depends_on_id',del); if(r.error) throw r.error; }
+    if(add.length){ const r=await sb.from('task_dependencies').insert(add.map(d=>({ task_id:id, depends_on_id:d }))); if(r.error) throw r.error; }
     resetForm(); await loadData(); renderAll();
   }catch(err){ alert('Erreur : '+err.message); }
+}
+/* Vrai si « id dépend de newDeps » ferait revenir sur id en suivant les dépendances. */
+function wouldCycle(id, newDeps){
+  const graph=d=> d===id ? newDeps : depsOf(d);
+  const seen=new Set(), stack=[...newDeps];
+  while(stack.length){ const x=stack.pop(); if(x===id) return true; if(seen.has(x)) continue; seen.add(x); stack.push(...graph(x)); }
+  return false;
+}
+function refreshDepPicker(){
+  const wrap=document.getElementById('f-deps-wrap'); if(!wrap || wrap.contains(document.activeElement)) return;
+  const checked=[...wrap.querySelectorAll('input:checked')].map(c=>Number(c.value));
+  const editId=Number(document.getElementById('edit-id')?.value)||null;
+  wrap.innerHTML=taskPickerHTML('f-deps', editId);
+  wrap.querySelectorAll('input').forEach(c=>{ c.checked=checked.includes(Number(c.value)); });
 }
 function editTask(id){
   if(!isAdmin) return;
@@ -1127,6 +1594,8 @@ function editTask(id){
   document.getElementById('f-status').value=task.status;
   document.getElementById('f-linkopen').checked=!!task.link_open;
   document.getElementById('f-desc').value=task.description||'';
+  const wrap=document.getElementById('f-deps-wrap'); if(wrap) wrap.innerHTML=taskPickerHTML('f-deps', id);
+  document.querySelectorAll('#f-deps input[type=checkbox]').forEach(c=>{ c.checked=depsOf(id).includes(Number(c.value)); });
   document.getElementById('form-title').innerHTML=icon('pencil')+' Panneau ingénieur — modifier la tâche';
   document.getElementById('submit-btn').innerText='Enregistrer les modifications';
   document.getElementById('cancel-btn').classList.remove('hidden');
@@ -1139,6 +1608,7 @@ function resetForm(){
   const ft=document.getElementById('form-title'); if(ft) ft.innerHTML=icon('settings')+' Panneau ingénieur — ajouter une tâche';
   const sbBtn=document.getElementById('submit-btn'); if(sbBtn) sbBtn.innerText='+ Ajouter la tâche';
   const cbBtn=document.getElementById('cancel-btn'); if(cbBtn) cbBtn.classList.add('hidden');
+  const wrap=document.getElementById('f-deps-wrap'); if(wrap) wrap.innerHTML=taskPickerHTML('f-deps');
   hydrateIcons();
 }
 async function deleteTask(id){
@@ -1164,7 +1634,11 @@ async function toggleLinkOpen(id, open){
   const { error }=await sb.from('tasks').update({ link_open: open }).eq('id',id);
   if(error){ alert('Erreur : '+error.message); } else { await loadData(); renderAll(); }
 }
-function toggleExpand(id){ expanded.has(id)?expanded.delete(id):expanded.add(id); renderView(); }
+function toggleExpand(id){
+  if(expanded.has(id)){ expanded.delete(id); renderView(); return; }
+  expanded.add(id); renderView();
+  loadHistory([id]).then(()=>{ if(currentView==='table' && expanded.has(id)) renderView(); });
+}
 async function addSubtask(taskId){
   if(!isAdmin) return;
   const inp=document.getElementById('sub-input-'+taskId); const title=(inp?inp.value:'').trim();
@@ -1173,10 +1647,11 @@ async function addSubtask(taskId){
   if(error){ alert('Erreur : '+error.message); } else { expanded.add(taskId); await loadData(); renderAll(); }
 }
 async function toggleSubtask(id, done){
-  if(!isAdmin) return;
+  const parent=allTasks().find(t=>(t.subtasks||[]).some(s=>s.id===id));
+  if(!canEditTask(parent)) return;
   const { error }=await sb.from('subtasks').update({ done }).eq('id',id);
-  if(error){ alert('Erreur : '+error.message); await loadData(); renderAll(); }
-  else { await loadData(); renderAll(); }
+  if(error) alert('Modification refusée : '+error.message);
+  await loadData(); await loadHistory([...expanded]); renderAll();
 }
 async function deleteSubtask(id){
   if(!isAdmin) return;
@@ -1207,18 +1682,54 @@ function exportCSV(){
 
 /* ============================ AUTH ============================ */
 function show(screen){
-  document.getElementById('setup-screen').classList.toggle('hidden', screen!=='setup');
-  document.getElementById('login-screen').classList.toggle('hidden', screen!=='login');
-  document.getElementById('loading-screen').classList.toggle('hidden', screen!=='loading');
+  ['setup','login','reset','loading'].forEach(s=> document.getElementById(s+'-screen').classList.toggle('hidden', screen!==s));
   document.getElementById('app').classList.toggle('hidden', screen!=='app');
   document.getElementById('user-area').classList.toggle('hidden', screen!=='app');
 }
+
+/* ---- Notifications (cloche) ---- */
+function lateForMe(){ return me ? allTasks().filter(t=>t.assignee_id===me.id && isLate(t)) : []; }
+function notifItemsHTML(){
+  const late=lateForMe(), fmt=s=>{ const d=new Date(s); return `${fmtDM(ymd(d))} ${fmtTime(d)}`; };
+  const lateHTML=late.map(t=>`<button class="w-full text-left px-4 py-2.5 border-b border-line hover:bg-panel2/60 flex gap-3" onclick="openNotif('late',${t.id})">
+      <span class="text-rosso mt-0.5">${icon('alert')}</span><span class="min-w-0"><span class="block text-sm text-ink truncate">En retard : ${esc(t.name)}</span><span class="block text-xs text-mute">Échéance dépassée le ${fmtDM(t.end)}</span></span></button>`).join('');
+  const stored=notifications.map(n=>`<button class="w-full text-left px-4 py-2.5 border-b border-line hover:bg-panel2/60 flex gap-3 ${n.read_at?'opacity-60':''}" onclick="openNotif(${n.id})">
+      <span class="${n.kind==='meeting'?'text-[#A78BFA]':'text-info'} mt-0.5">${icon(n.kind==='meeting'?'calendar':'list-checks')}</span>
+      <span class="min-w-0 flex-1"><span class="block text-sm text-ink truncate">${esc(n.title)}</span><span class="block text-xs text-mute">${n.body?esc(n.body)+' · ':''}${fmt(n.created_at)}</span></span>
+      ${n.read_at?'':'<i class="inline-block w-2 h-2 rounded-full bg-rosso mt-2 shrink-0"></i>'}</button>`).join('');
+  return (lateHTML+stored) || '<p class="text-sm text-mute px-4 py-6 text-center">Aucune notification.</p>';
+}
 function renderUserArea(){
-  const el=document.getElementById('user-area'); if(!me){ el.innerHTML=''; return; }
+  const el=document.getElementById('user-area'); if(!el) return; if(!me){ el.innerHTML=''; return; }
   const badges={ ingenieur:'<span class="badge bg-rosso/15 text-rosso border-rosso/40">Ingénieur</span>', contributeur:'<span class="badge bg-amber/15 text-amber border-amber/40">Contributeur</span>', lecture:'<span class="badge bg-info/15 text-info border-info/40">Lecture seule</span>' };
   const roleBadge = badges[me.role] || badges.lecture;
-  el.innerHTML=`<span class="hidden sm:inline text-xs text-mute text-right leading-tight">${esc(me.full_name||me.email||'')}${me.full_name?`<br><span class="text-[10px]">${esc(me.email||'')}</span>`:''}</span>${roleBadge}<button class="btn btn-ghost" onclick="logout()">Déconnexion</button>`;
+  const count=notifications.filter(n=>!n.read_at).length + lateForMe().length;
+  el.innerHTML=`<span class="hidden sm:inline text-xs text-mute text-right leading-tight">${esc(me.full_name||me.email||'')}${me.full_name?`<br><span class="text-[10px]">${esc(me.email||'')}</span>`:''}</span>${roleBadge}
+    <button id="notif-btn" class="iconbtn relative" onclick="toggleNotif(event)" title="Notifications" aria-label="Notifications" aria-expanded="${notifOpen}">${icon('bell')}${count?`<span class="notif-dot">${count>9?'9+':count}</span>`:''}</button>
+    <button class="btn btn-ghost" onclick="logout()">Déconnexion</button>
+    ${notifOpen?`<div class="notif-panel" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-line"><span class="font-display font-bold text-white text-sm">Notifications</span>
+        ${notifications.some(n=>!n.read_at)?'<button class="text-xs text-info hover:underline" onclick="markAllRead()">Tout marquer comme lu</button>':''}</div>
+      ${notifItemsHTML()}</div>`:''}`;
 }
+function toggleNotif(e){ e.stopPropagation(); notifOpen=!notifOpen; renderUserArea(); }
+document.addEventListener('click', ()=>{ if(notifOpen){ notifOpen=false; renderUserArea(); } });
+async function openNotif(id, taskId){
+  notifOpen=false;
+  if(id==='late'){ renderUserArea(); openTask(taskId); return; }
+  const n=notifications.find(x=>x.id===id); if(!n) return;
+  if(!n.read_at){ n.read_at=new Date().toISOString(); sb.from('notifications').update({ read_at:n.read_at }).eq('id',id).then(()=>{}); }
+  renderUserArea();
+  if(n.kind==='meeting') switchView('meetings'); else if(n.ref_id) openTask(n.ref_id);
+}
+async function markAllRead(){
+  const ids=notifications.filter(n=>!n.read_at).map(n=>n.id); if(!ids.length) return;
+  const now=new Date().toISOString();
+  const { error }=await sb.from('notifications').update({ read_at:now }).in('id',ids);
+  if(!error) notifications.forEach(n=>{ if(!n.read_at) n.read_at=now; });
+  renderUserArea();
+}
+
 async function doLogin(e){
   e.preventDefault();
   const email=document.getElementById('login-email').value.trim(), password=document.getElementById('login-pass').value;
@@ -1229,6 +1740,31 @@ async function doLogin(e){
   if(error){ err.innerText='Identifiants incorrects ou compte inexistant.'; err.classList.remove('hidden'); return; }
   await afterLogin(data.session);
 }
+/* ---- Mot de passe oublié ---- */
+async function forgotPassword(){
+  const msg=document.getElementById('forgot-msg');
+  const email=document.getElementById('login-email').value.trim();
+  const say=(t,ok)=>{ msg.textContent=t; msg.className='mt-2 text-xs '+(ok?'text-go':'text-rosso'); };
+  if(!email){ say("Saisis d’abord ton adresse e-mail ci-dessus.", false); document.getElementById('login-email').focus(); return; }
+  const { error }=await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin+location.pathname });
+  // Même message que le compte existe ou non : ne révèle pas quelles adresses sont inscrites.
+  if(error && !/rate|limit/i.test(error.message)) console.error(error);
+  say(error && /rate|limit/i.test(error.message) ? "Trop de demandes, réessaie dans quelques minutes." : "Si un compte existe pour cette adresse, un e-mail de réinitialisation vient d’être envoyé.", !(error && /rate|limit/i.test(error.message)));
+}
+async function doResetPassword(e){
+  e.preventDefault();
+  const p1=document.getElementById('reset-pass').value, p2=document.getElementById('reset-pass2').value;
+  const err=document.getElementById('reset-error'), btn=document.getElementById('reset-btn');
+  err.classList.add('hidden');
+  if(p1!==p2){ err.textContent='Les deux mots de passe ne correspondent pas.'; err.classList.remove('hidden'); return; }
+  btn.disabled=true;
+  const { error }=await sb.auth.updateUser({ password:p1 });
+  btn.disabled=false;
+  if(error){ err.textContent='Erreur : '+error.message; err.classList.remove('hidden'); return; }
+  history.replaceState(null,'',location.pathname);
+  const { data:{ session } }=await sb.auth.getSession();
+  if(session) await afterLogin(session); else show('login');
+}
 async function logout(){ try{ await sb.auth.signOut(); }finally{ location.reload(); } }
 async function afterLogin(session){
   me={ id:session.user.id, email:session.user.email, role:'lecture' };
@@ -1236,24 +1772,23 @@ async function afterLogin(session){
   const { data:prof }=await sb.from('profiles').select('role,full_name,email,department_id').eq('id',me.id).maybeSingle();
   if(prof){ me.role=prof.role; me.full_name=prof.full_name; me.department_id=prof.department_id; }
   isAdmin = me.role==='ingenieur';
-  await loadData();
-  await loadUsers();
-  show('app'); document.getElementById('app').classList.add('fade-up'); renderUserArea();
-  gaugeAnimated=false; renderAll(); startCountdown(); subscribeRealtime();
+  await Promise.all([loadData(), loadUsers(), loadNotifications()]);
+  show('app'); document.getElementById('app').classList.add('fade-up');
+  gaugeAnimated=false;
+  switchView(isAdmin ? 'pitwall' : 'mine');   // chacun arrive sur ce qui le concerne
+  renderAll(); startCountdown(); subscribeRealtime();
 }
 
 /* ============================ REALTIME ============================ */
 function subscribeRealtime(){
   if(channel) return;
-  const reload=debounce(async ()=>{ await loadData(); refreshEventLabel(); renderAll(); }, 250);
-  channel=sb.channel('pitwall')
-    .on('postgres_changes',{event:'*',schema:'public',table:'tasks'}, reload)
-    .on('postgres_changes',{event:'*',schema:'public',table:'subtasks'}, reload)
-    .on('postgres_changes',{event:'*',schema:'public',table:'departments'}, reload)
-    .on('postgres_changes',{event:'*',schema:'public',table:'settings'}, reload)
-    .on('postgres_changes',{event:'*',schema:'public',table:'meetings'}, reload)
-    .on('postgres_changes',{event:'*',schema:'public',table:'meeting_participants'}, reload)
-    .subscribe();
+  const reload=debounce(async ()=>{ await loadData(); await loadHistory([...expanded]); refreshEventLabel(); renderAll(); }, 250);
+  channel=sb.channel('pitwall');
+  ['tasks','subtasks','departments','settings','meetings','meeting_participants','meeting_tasks','task_dependencies']
+    .forEach(table=> channel.on('postgres_changes',{ event:'*', schema:'public', table }, reload));
+  channel.on('postgres_changes',{ event:'*', schema:'public', table:'notifications', filter:`user_id=eq.${me.id}` },
+    async ()=>{ await loadNotifications(); renderUserArea(); });
+  channel.subscribe();
 }
 
 /* ============================ DÉMARRAGE ============================ */
@@ -1262,10 +1797,14 @@ async function boot(){
   if(!CONFIGURED){ show('setup'); if(!window.supabase) document.getElementById('setup-sdk').classList.remove('hidden'); return; }
   if(!sb){ show('setup'); document.getElementById('setup-sdk').classList.remove('hidden'); return; }
   try{
+    sb.auth.onAuthStateChange((event, sess)=>{
+      if(event==='PASSWORD_RECOVERY'){ show('reset'); return; }
+      if(!sess){ me=null; isAdmin=false; show('login'); }
+    });
     const { data:{ session } }=await sb.auth.getSession();
+    if(RECOVERY && session){ show('reset'); return; }   // arrivée par le lien « mot de passe oublié »
     if(!session){ show('login'); }
     else { await afterLogin(session); }
-    sb.auth.onAuthStateChange((_e, sess)=>{ if(!sess){ me=null; isAdmin=false; show('login'); } });
   }catch(err){ console.error(err); show('login'); }
 }
 boot();
