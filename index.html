@@ -256,6 +256,9 @@ function canEditLink(){ return !!(me && (me.role==='ingenieur' || me.role==='con
 function deptName(id){ const d=projectData.find(x=>x.id===id); return d?d.rubrique:''; }
 function userLabel(u){ const dn=deptName(u.department_id); return (u.full_name||u.email||'—')+(dn?` — ${dn}`:''); }
 function assigneeLabel(t){ if(t.assignee_id){ const u=users.find(x=>x.id===t.assignee_id); return u?(u.full_name||u.email):'Assigné'; } return t.assignee||'Non assigné'; }
+function assigneeName(t){ return (t.assignee_id||t.assignee) ? assigneeLabel(t) : ''; }
+/* N'accepte que les liens http(s) : bloque javascript:, data:, etc. */
+function safeUrl(s){ if(!s) return null; try{ const u=new URL(String(s).trim()); return (u.protocol==='http:'||u.protocol==='https:') ? u.href : null; }catch(_){ return null; } }
 
 /* ---- Icônes (SVG intégrés, style Lucide) ---- */
 const ICONS={
@@ -386,7 +389,7 @@ function getFiltered(){
   let data=projectData.map(sec=>({ id:sec.id, rubrique:sec.rubrique, tasks:sec.tasks.filter(t=>{
     if(filters.status!=='ALL' && t.status!==filters.status) return false;
     if(filters.priority!=='ALL' && (t.priority||'Normal')!==filters.priority) return false;
-    if(q && !((t.name||'').toLowerCase().includes(q)||(t.assignee||'').toLowerCase().includes(q))) return false;
+    if(q && !((t.name||'').toLowerCase().includes(q)||assigneeName(t).toLowerCase().includes(q))) return false;
     return true;
   })}));
   if(filters.dept!=='ALL') data=data.filter(s=>s.rubrique===filters.dept);
@@ -496,7 +499,7 @@ function renderTable(){
             <td class="py-3.5 px-5">${statusBadge(t.status)}</td>
             <td class="py-3.5 px-5"><div class="flex items-center gap-2"><div class="bar flex-1"><i style="width:${t.progress}%"></i></div><span class="font-display tnum text-mute w-9 text-right">${t.progress}%</span></div></td>
             <td class="py-3.5 px-5 text-right whitespace-nowrap">
-              ${t.link?`<a href="${esc(t.link)}" target="_blank" rel="noopener" class="text-info hover:underline">${icon('external-link')} Suivi</a>`:''}
+              ${safeUrl(t.link)?`<a href="${esc(safeUrl(t.link))}" target="_blank" rel="noopener noreferrer" class="text-info hover:underline">${icon('external-link')} Suivi</a>`:''}
               ${isAdmin
                 ? `<button onclick="toggleLinkOpen(${t.id}, ${t.link_open?'false':'true'})" class="ml-2 ${t.link_open?'text-amber hover:bg-amber/10':'text-mute hover:bg-panel2'} rounded-md px-1.5 py-1" title="${t.link_open?'Fermer la contribution sur le lien':'Ouvrir le lien à la contribution'}">${t.link_open?icon('lock-open'):icon('lock')}</button><button onclick="editTask(${t.id})" class="text-amber hover:bg-amber/10 rounded-md px-1.5 py-1" title="Modifier" aria-label="Modifier">${icon('pencil')}</button><button onclick="deleteTask(${t.id})" class="text-rosso hover:bg-rosso/10 rounded-md px-1.5 py-1" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>`
                 : (me && me.role==='contributeur')
@@ -535,8 +538,8 @@ function renderTable(){
 
 /* ============================ VUE : GANTT ============================ */
 function renderGantt(){
-  const data=getFiltered();
-  let dates=[]; data.forEach(s=>s.tasks.forEach(t=>{ if(t.start)dates.push(pDate(t.start)); if(t.end)dates.push(pDate(t.end)); }));
+  const data=getFiltered().map(s=>({ ...s, tasks:s.tasks.filter(t=>t.start&&t.end) })).filter(s=>s.tasks.length);
+  let dates=[]; data.forEach(s=>s.tasks.forEach(t=>{ dates.push(pDate(t.start)); dates.push(pDate(t.end)); }));
   const raceD=new Date(race.date); if(!isNaN(raceD)) dates.push(new Date(raceD.getFullYear(),raceD.getMonth(),raceD.getDate()));
   dates.push(today0());
   if(!data.length||!dates.length){ document.getElementById('view').innerHTML=emptyState('Aucune tâche planifiée à afficher.'); return; }
@@ -710,7 +713,10 @@ function switchView(v){
 function renderAll(){
   const tabAdmin=document.getElementById('tab-admin');
   if(tabAdmin) tabAdmin.classList.toggle('hidden', !isAdmin);
-  renderView(); populateDeptControls(); populateAssigneeOptions(); renderDeptManager(); renderUsers();
+  // Panneau ingénieur déjà affiché : on ne reconstruit pas la page (sinon le formulaire en cours de saisie est effacé),
+  // on rafraîchit seulement ses sous-parties ci-dessous.
+  if(!(currentView==='admin' && isAdmin && document.getElementById('task-form'))) renderView();
+  populateDeptControls(); populateAssigneeOptions(); renderDeptManager(); renderUsers();
 }
 function populateDeptControls(){
   const names=projectData.map(s=>s.rubrique);
@@ -765,9 +771,13 @@ async function renameDept(id, val){
 }
 async function moveDept(id, dir){
   const i=projectData.findIndex(s=>s.id===id), j=i+dir; if(i<0||j<0||j>=projectData.length) return;
-  const a=projectData[i], b=projectData[j];
-  try{ await sb.from('departments').update({position:b.position}).eq('id',a.id); await sb.from('departments').update({position:a.position}).eq('id',b.id); resetForm(); await loadData(); renderAll(); }
-  catch(err){ alert('Erreur : '+err.message); }
+  // Nouvel ordre complet, puis positions renumérotées 0..n-1 (gère les positions en double).
+  const order=[...projectData]; [order[i],order[j]]=[order[j],order[i]];
+  const changes=order.map((s,k)=>({ id:s.id, position:k })).filter(c=> projectData.find(s=>s.id===c.id).position!==c.position);
+  const results=await Promise.all(changes.map(c=> sb.from('departments').update({ position:c.position }).eq('id',c.id)));
+  const failed=results.find(r=>r.error);
+  if(failed) alert('Erreur : '+failed.error.message);
+  resetForm(); await loadData(); renderAll();
 }
 async function addDept(){
   const inp=document.getElementById('new-dept'), name=inp.value.trim();
@@ -810,7 +820,7 @@ function renderUsers(){
         <option value="contributeur"${u.role==='contributeur'?' selected':''}>Contributeur</option>
         <option value="ingenieur"${u.role==='ingenieur'?' selected':''}>Ingénieur</option>
       </select>
-      <button class="iconbtn danger" ${self?'disabled':''} onclick="deleteUser('${u.id}','${esc(u.email||'')}')" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
+      <button class="iconbtn danger" ${self?'disabled':''} onclick="deleteUser('${esc(u.id)}')" title="Supprimer" aria-label="Supprimer">${icon('trash-2')}</button>
     </div>`;
   }).join('');
   hydrateIcons();
@@ -849,8 +859,9 @@ async function setUserDepartment(id, value){
   if(!res.ok) alert('Erreur : '+res.error);
   await loadUsers(); renderUsers(); renderDeptManager();
 }
-async function deleteUser(id, email){
-  if(!confirm(`Supprimer le compte ${email||''} ? Action irréversible.`)) return;
+async function deleteUser(id){
+  const email=(users.find(u=>u.id===id)||{}).email||'';
+  if(!confirm(`Supprimer le compte ${email} ? Action irréversible.`)) return;
   const res=await callManageUsers({ action:'delete', user_id:id });
   if(!res.ok){ alert('Erreur : '+res.error); return; }
   await loadUsers(); renderUsers();
@@ -868,9 +879,11 @@ async function handleFormSubmit(e){
   const rub=document.getElementById('f-rub').value.trim();
   const start=document.getElementById('f-start').value, end=document.getElementById('f-end').value;
   if(pDate(end)<pDate(start)){ alert("La date de fin ne peut pas précéder la date de début."); return; }
+  const rawLink=document.getElementById('f-link').value.trim();
+  if(rawLink && !safeUrl(rawLink)){ alert("Le lien de suivi doit commencer par http:// ou https://."); return; }
   const payload={ name:document.getElementById('f-name').value.trim(), assignee_id:document.getElementById('f-assignee').value||null, assignee:null,
     priority:document.getElementById('f-priority').value, start_date:start, end_date:end,
-    progress:parseInt(document.getElementById('f-progress').value,10), link:document.getElementById('f-link').value.trim()||null,
+    progress:parseInt(document.getElementById('f-progress').value,10), link:safeUrl(rawLink),
     status:document.getElementById('f-status').value, link_open:document.getElementById('f-linkopen').checked, description:document.getElementById('f-desc').value.trim()||null };
   const editId=document.getElementById('edit-id').value;
   try{
@@ -928,7 +941,8 @@ async function editLink(id){
   if(me.role==='contributeur' && !task.link_open){ alert("Cette tâche n'est pas ouverte à la contribution."); return; }
   const url=prompt("Lien de suivi (Git, Jira, télémétrie) :", task.link||'');
   if(url===null) return;
-  const link=url.trim()||null;
+  if(url.trim() && !safeUrl(url)){ alert("Le lien doit commencer par http:// ou https://."); return; }
+  const link=safeUrl(url);
   const { error }=await sb.from('tasks').update({ link }).eq('id',id);
   if(error){ alert('Erreur : '+error.message); } else { await loadData(); renderAll(); }
 }
@@ -968,12 +982,12 @@ async function saveRace(){
 
 /* ============================ EXPORTS ============================ */
 function exportJSON(){
-  const out=projectData.map(s=>({ rubrique:s.rubrique, tasks:s.tasks.map(t=>({ name:t.name, assignee:t.assignee, priority:t.priority, start:t.start, end:t.end, progress:t.progress, link:t.link, status:t.status })) }));
+  const out=projectData.map(s=>({ rubrique:s.rubrique, tasks:s.tasks.map(t=>({ name:t.name, assignee:assigneeName(t)||null, priority:t.priority, start:t.start, end:t.end, progress:t.progress, link:t.link, status:t.status })) }));
   const a=document.createElement('a'); a.href="data:application/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(out,null,2)); a.download="paddock_planning.json"; a.click();
 }
 function exportCSV(){
   const rows=[["Departement","Intervention","Responsable","Criticite","Debut","Fin","Avancement","Statut","Lien"]];
-  projectData.forEach(s=>s.tasks.forEach(t=>rows.push([s.rubrique,t.name,t.assignee||'',t.priority||'',t.start||'',t.end||'',t.progress+'%',t.status,t.link||''])));
+  projectData.forEach(s=>s.tasks.forEach(t=>rows.push([s.rubrique,t.name,assigneeName(t),t.priority||'',t.start||'',t.end||'',t.progress+'%',t.status,t.link||''])));
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
   const a=document.createElement('a'); a.href="data:text/csv;charset=utf-8,\uFEFF"+encodeURIComponent(csv); a.download="paddock_planning.csv"; a.click();
 }
